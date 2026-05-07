@@ -18,9 +18,9 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
@@ -43,20 +43,20 @@ jobs:
     if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and Push Docker Image (amd64)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: ./
           push: true
@@ -72,20 +72,20 @@ jobs:
     if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and Push Docker Image (arm64)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: ./
           push: true
@@ -100,14 +100,14 @@ jobs:
     needs: [build-and-push-amd64, build-and-push-arm64]
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Create multi-arch manifest (canary)
         run: |
@@ -122,23 +122,23 @@ jobs:
     if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and Push MongoDB Backup (amd64)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: ./additional-containers/mongodb-backup
           file: ./additional-containers/mongodb-backup/Dockerfile.amd64
@@ -155,23 +155,23 @@ jobs:
     if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and Push PostgreSQL Backup (amd64)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: ./additional-containers/postgres-backup
           file: ./additional-containers/postgres-backup/Dockerfile.amd64
@@ -188,23 +188,23 @@ jobs:
     if: ${{ needs.test.result == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and Push MariaDB Backup (amd64)
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: ./additional-containers/mariadb-backup
           file: ./additional-containers/mariadb-backup/Dockerfile.amd64
