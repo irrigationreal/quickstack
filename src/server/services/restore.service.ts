@@ -7,6 +7,7 @@ import { FsUtils } from "../utils/fs.utils";
 import deploymentService from "./deployment.service";
 import k3s from "../adapter/kubernetes-api.adapter";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
+import { V1PodList } from "@kubernetes/client-node";
 
 class RestoreService {
 
@@ -68,7 +69,7 @@ class RestoreService {
         const name = KubeObjectNameUtils.toRestorePodName(volumeId);
         const pvcName = KubeObjectNameUtils.toPvcName(volume.sharedVolumeId ?? volumeId);
 
-        const existingPods = await k3s.core.listNamespacedPod(namespace);
+        const existingPods = await k3s.core.listNamespacedPod(namespace) as { body: V1PodList };
         const pod = existingPods.body.items.find((item) => item.metadata?.labels?.app === name);
         if (pod) {
             return;

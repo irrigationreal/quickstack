@@ -43,7 +43,7 @@ export class CronCheckUtils {
         }
 
         try {
-            const interval = parseExpression(cron, { currentDate: now, iterator: false });
+            const interval = parseExpression(cron, { currentDate: now, iterator: false, utc: true });
             const prev = interval.prev();
             return prev.toDate();
         } catch {

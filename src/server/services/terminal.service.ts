@@ -6,6 +6,10 @@ import stream from 'stream';
 import { StreamUtils } from "../../shared/utils/stream.utils";
 import WebSocket from "ws";
 import standalonePodService from "./standalone-services/standalone-pod.service";
+import podService from "./pod.service";
+import { ServiceException } from "@/shared/model/service.exception.model";
+import { UserSession } from "@/shared/model/sim-session.model";
+import { UserGroupUtils } from "@/shared/utils/role.utils";
 
 interface TerminalStrean {
     stdoutStream: stream.PassThrough;
@@ -33,6 +37,19 @@ export class TerminalService {
                 console.log(terminalInfo)
                 const streamInputKey = StreamUtils.getInputStreamName(terminalInfo);
                 const streamOutputKey = StreamUtils.getOutputStreamName(terminalInfo);
+
+                const userSession = socket.data.userSession as UserSession | undefined;
+                if (!userSession) {
+                    throw new ServiceException('User is not authenticated.');
+                }
+
+                const pod = await podService.getPodInfoByName(terminalInfo.namespace, terminalInfo.podName);
+                if (!pod.appId || !UserGroupUtils.sessionHasWriteAccessForApp(userSession, pod.appId)) {
+                    throw new ServiceException('User is not authorized for this terminal.');
+                }
+                if (pod.containerName !== terminalInfo.containerName) {
+                    throw new ServiceException('User is not authorized for this container.');
+                }
 
                 const podReachable = await standalonePodService.waitUntilPodIsRunningFailedOrSucceded(terminalInfo.namespace, terminalInfo.podName);
                 if (!podReachable) {

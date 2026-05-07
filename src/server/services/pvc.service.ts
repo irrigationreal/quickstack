@@ -1,6 +1,6 @@
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1PersistentVolumeClaim } from "@kubernetes/client-node";
+import { V1PersistentVolume, V1PersistentVolumeClaim, V1PersistentVolumeClaimList } from "@kubernetes/client-node";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { Constants } from "../../shared/utils/constants";
@@ -47,7 +47,7 @@ class PvcService {
     }
 
     async doesAppConfigurationIncreaseAnyPvcSize(app: AppExtendedModel) {
-        const existingPvcsResponse = await k3s.core.listNamespacedPersistentVolumeClaim(app.projectId);
+        const existingPvcsResponse = await k3s.core.listNamespacedPersistentVolumeClaim(app.projectId) as { body: V1PersistentVolumeClaimList };
         const existingPvcs = existingPvcsResponse.body.items;
         const baseVolumes = await this.getBaseVolumes(app);
 
@@ -63,17 +63,17 @@ class PvcService {
     }
 
     async getAllPvcForApp(projectId: string, appId: string) {
-        const res = await k3s.core.listNamespacedPersistentVolumeClaim(projectId);
+        const res = await k3s.core.listNamespacedPersistentVolumeClaim(projectId) as { body: V1PersistentVolumeClaimList };
         return res.body.items.filter((item) => item.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID] === appId);
     }
 
     async getExistingPvcByVolumeId(namespace: string, volumeId: string) {
-        const allVolumes = await k3s.core.listNamespacedPersistentVolumeClaim(namespace);
+        const allVolumes = await k3s.core.listNamespacedPersistentVolumeClaim(namespace) as { body: V1PersistentVolumeClaimList };
         return allVolumes.body.items.find(pvc => pvc.metadata?.name === KubeObjectNameUtils.toPvcName(volumeId));
     }
 
-    async getAllPvc() {
-        const res = await k3s.core.listPersistentVolumeClaimForAllNamespaces();
+    async getAllPvc(): Promise<V1PersistentVolumeClaim[]> {
+        const res = await k3s.core.listPersistentVolumeClaimForAllNamespaces() as { body: V1PersistentVolumeClaimList };
         return res.body.items;
     }
 
@@ -119,7 +119,7 @@ class PvcService {
     }
 
     async createOrUpdatePvc(app: AppExtendedModel) {
-        const existingPvcsResponse = await k3s.core.listNamespacedPersistentVolumeClaim(app.projectId);
+        const existingPvcsResponse = await k3s.core.listNamespacedPersistentVolumeClaim(app.projectId) as { body: V1PersistentVolumeClaimList };
         const existingPvcs = existingPvcsResponse.body.items;
         const baseVolumes = await this.getBaseVolumes(app);
 
@@ -204,7 +204,7 @@ class PvcService {
 
     private async waitUntilPvResized(persistentVolumeName: string, size: number) {
         let iterationCount = 0;
-        let pv = await k3s.core.readPersistentVolume(persistentVolumeName);
+        let pv = await k3s.core.readPersistentVolume(persistentVolumeName) as { body: V1PersistentVolume };
         while (pv.body.spec!.capacity!.storage !== KubeSizeConverter.megabytesToKubeFormat(size)) {
             if (iterationCount > 30) {
                 console.error(`Timeout: PV ${persistentVolumeName} not resized to ${KubeSizeConverter.megabytesToKubeFormat(size)}`);

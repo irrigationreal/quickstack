@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { simpleRoute } from "@/server/utils/action-wrapper.utils";
+import { isAuthorizedReadForApp, simpleRoute } from "@/server/utils/action-wrapper.utils";
 import deploymentLogService from "@/server/services/deployment-logs.service";
 
 // Prevents this route's response from being cached
 export const dynamic = "force-dynamic";
 
 const zodInputModel = z.object({
-    deploymentId: z.string(),
+    deploymentId: z.string().uuid(),
 });
 
 export async function POST(request: Request) {
@@ -15,6 +15,8 @@ export async function POST(request: Request) {
 
         const inputInfo = zodInputModel.parse(input);
         let { deploymentId } = inputInfo;
+        const appId = await deploymentLogService.getAppIdForDeploymentId(deploymentId);
+        await isAuthorizedReadForApp(appId);
 
         let closeListenerFunc: (() => void) | undefined;
 

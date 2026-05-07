@@ -6,6 +6,7 @@ import podService from "../../pod.service";
 import stream from "stream";
 import { PodsInfoModel } from "../../../../shared/model/pods-info.model";
 import { ServiceException } from "../../../../shared/model/service.exception.model";
+import { V1PodList } from "@kubernetes/client-node";
 
 export const BACKUP_NAMESPACE = Constants.QS_NAMESPACE;
 export const s3BucketPrefix = 'quickstack-backups';
@@ -74,7 +75,7 @@ class SharedBackupService {
     }
 
     async getPodForBackupJob(jobName: string, namespace?: string): Promise<PodsInfoModel> {
-        const res = await k3s.core.listNamespacedPod(namespace || BACKUP_NAMESPACE, undefined, undefined, undefined, undefined, `job-name=${jobName}`);
+        const res = await k3s.core.listNamespacedPod(namespace || BACKUP_NAMESPACE, undefined, undefined, undefined, undefined, `job-name=${jobName}`) as { body: V1PodList };
         const pods = res.body.items;
         if (pods.length === 0) {
             throw new ServiceException(`No pod found for backup job ${jobName}`);

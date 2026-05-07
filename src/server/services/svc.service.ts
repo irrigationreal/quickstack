@@ -1,6 +1,6 @@
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1PersistentVolumeClaim } from "@kubernetes/client-node";
+import { V1PersistentVolumeClaim, V1ServiceList } from "@kubernetes/client-node";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { AppVolume } from "@prisma/client";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
@@ -20,7 +20,7 @@ class SvcService {
     }
 
     async getService(projectId: string, appId: string) {
-        const allServices = await k3s.core.listNamespacedService(projectId);
+        const allServices = await k3s.core.listNamespacedService(projectId) as { body: V1ServiceList };
         if (allServices.body.items.some((item) => item.metadata?.name === KubeObjectNameUtils.toServiceName(appId))) {
             const res = await k3s.core.readNamespacedService(KubeObjectNameUtils.toServiceName(appId), projectId);
             return res.body;

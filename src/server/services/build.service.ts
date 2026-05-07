@@ -18,7 +18,7 @@ import namespaceService from "./namespace.service";
 import paramService, { ParamService } from "./param.service";
 import registryService, { BUILD_NAMESPACE } from "./registry.service";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
-import { V1JobStatus, V1ResourceRequirements } from "@kubernetes/client-node";
+import { V1Job, V1JobList, V1JobStatus, V1ResourceRequirements } from "@kubernetes/client-node";
 import appGitSshKeyService from "./app-git-ssh-key.service";
 
 class BuildService {
@@ -200,7 +200,7 @@ class BuildService {
 
     async deleteAllBuildsOfApp(appId: string) {
         const jobNamePrefix = KubeObjectNameUtils.toJobName(appId);
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         const jobsOfBuild = jobs.body.items.filter((job) => job.metadata?.name?.startsWith(jobNamePrefix));
         for (const job of jobsOfBuild) {
             await this.deleteBuild(job.metadata?.name!);
@@ -208,7 +208,7 @@ class BuildService {
     }
 
     async deleteAllFailedOrSuccededBuilds() {
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         const jobsToDelete = jobs.body.items.filter((job) => {
             const status = this.getJobStatusString(job.status);
             return status !== 'RUNNING' && status !== 'PENDING';
@@ -219,15 +219,15 @@ class BuildService {
     }
 
     async deleteAllBuildsOfProject(projectId: string) {
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         const jobsOfProject = jobs.body.items.filter((job) => job.metadata?.annotations?.[Constants.QS_ANNOTATION_PROJECT_ID] === projectId);
         for (const job of jobsOfProject) {
             await this.deleteBuild(job.metadata?.name!);
         }
     }
 
-    async getBuildByName(buildName: string) {
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+    async getBuildByName(buildName: string): Promise<V1Job | undefined> {
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         return jobs.body.items.find((job) => job.metadata?.name === buildName);
     }
 
@@ -251,9 +251,9 @@ class BuildService {
         console.log(`Deleted build job ${buildName}`);
     }
 
-    async getBuildsForApp(appId: string) {
+    async getBuildsForApp(appId: string): Promise<BuildJobModel[]> {
         const jobNamePrefix = KubeObjectNameUtils.toJobName(appId);
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         const jobsOfBuild = jobs.body.items.filter((job) => job.metadata?.name?.startsWith(jobNamePrefix));
         const builds = jobsOfBuild.map((job) => ({
             name: job.metadata?.name,
@@ -275,7 +275,7 @@ class BuildService {
 
     async getJobStatus(buildName: string): Promise<'UNKNOWN' | 'RUNNING' | 'FAILED' | 'SUCCEEDED' | 'PENDING'> {
         try {
-            const response = await k3s.batch.readNamespacedJobStatus(buildName, BUILD_NAMESPACE);
+            const response = await k3s.batch.readNamespacedJobStatus(buildName, BUILD_NAMESPACE) as { body: { status?: V1JobStatus } };
             return this.getJobStatusString(response.body.status);
         } catch (err) {
             console.error(err);
@@ -309,7 +309,7 @@ class BuildService {
     }
 
     async getAllBuilds(): Promise<GlobalBuildJobModel[]> {
-        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+        const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
         const appIds = Array.from(new Set(
             jobs.body.items
                 .map((job) => job.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID])

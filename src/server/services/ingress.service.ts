@@ -1,6 +1,6 @@
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1Ingress, V1Secret } from "@kubernetes/client-node";
+import { V1Ingress, V1IngressList, V1Secret, V1SecretList } from "@kubernetes/client-node";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { Constants } from "../../shared/utils/constants";
 import ingressSetupService from "./setup-services/ingress-setup.service";
@@ -10,13 +10,13 @@ import { CryptoUtils } from "../utils/crypto.utils";
 
 class IngressService {
 
-    async getAllIngressForApp(projectId: string, appId: string) {
-        const res = await k3s.network.listNamespacedIngress(projectId);
+    async getAllIngressForApp(projectId: string, appId: string): Promise<V1Ingress[]> {
+        const res = await k3s.network.listNamespacedIngress(projectId) as { body: V1IngressList };
         return res.body.items.filter((item) => item.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID] === appId);
     }
 
-    async getIngressByName(projectId: string, domainId: string) {
-        const res = await k3s.network.listNamespacedIngress(projectId);
+    async getIngressByName(projectId: string, domainId: string): Promise<V1Ingress | undefined> {
+        const res = await k3s.network.listNamespacedIngress(projectId) as { body: V1IngressList };
         return res.body.items.find((item) => item.metadata?.name === KubeObjectNameUtils.getIngressName(domainId));
     }
 
@@ -162,7 +162,7 @@ class IngressService {
 
         // delete traefik basic auth secret
         const secretName = `bas-${basicAuthId}`;
-        const existingSecrets = await k3s.core.listNamespacedSecret(namespace);
+        const existingSecrets = await k3s.core.listNamespacedSecret(namespace) as { body: V1SecretList };
         const existingSecret = existingSecrets.body.items.find((item) => item.metadata?.name === secretName);
         if (existingSecret) {
             await k3s.core.deleteNamespacedSecret(secretName, namespace);
@@ -182,7 +182,7 @@ class IngressService {
      */
     async getPlaintextCredentialsFromSecret(namespace: string, basicAuthId: string): Promise<{ username: string; password: string } | undefined> {
         const plaintextSecretName = `bas-plain-${basicAuthId}`;
-        const existingSecrets = await k3s.core.listNamespacedSecret(namespace);
+        const existingSecrets = await k3s.core.listNamespacedSecret(namespace) as { body: V1SecretList };
         const secret = existingSecrets.body.items.find((item) => item.metadata?.name === plaintextSecretName);
         if (!secret?.data) return undefined;
         const usernameB64 = secret.data['username'];
@@ -208,7 +208,7 @@ class IngressService {
         const middlewareNamespace = namespace;
 
         // Create a secret with basic auth users
-        const existingSecrets = await k3s.core.listNamespacedSecret(secretNamespace);
+        const existingSecrets = await k3s.core.listNamespacedSecret(secretNamespace) as { body: V1SecretList };
         const existingSecret = existingSecrets.body.items.find((item) => item.metadata?.name === basicAuthSecretName);
 
         const usernameAndSha1PasswordStrings = usernamePassword.map(([username, password]) => `${username}:{SHA}${createHash('sha1').update(password).digest('base64')}`);

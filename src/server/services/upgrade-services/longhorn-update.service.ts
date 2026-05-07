@@ -108,7 +108,7 @@ class LonghornUpdateService {
      */
     async isUpgradeInProgress(): Promise<boolean> {
         try {
-            const podsResponse = await k3s.core.listNamespacedPod(this.LONGHORN_NAMESPACE);
+            const podsResponse = await k3s.core.listNamespacedPod(this.LONGHORN_NAMESPACE) as { body: k8s.V1PodList };
             const pods = podsResponse.body.items;
 
             if (pods.length === 0) {

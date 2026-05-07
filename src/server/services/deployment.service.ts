@@ -1,6 +1,6 @@
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1Deployment, V1ReplicaSet, V1Probe } from "@kubernetes/client-node";
+import { V1Deployment, V1DeploymentList, V1ReplicaSet, V1ReplicaSetList, V1Probe } from "@kubernetes/client-node";
 import buildService from "./build.service";
 import { ListUtils } from "../../shared/utils/list.utils";
 import { DeploymentInfoModel, DeploymentStatus } from "@/shared/model/deployment-info.model";
@@ -24,16 +24,16 @@ import { AppBuildMethod } from "@/shared/model/app-source-info.model";
 
 class DeploymentService {
 
-    async getDeployment(namespace: string, appName: string) {
-        const allDeployments = await k3s.apps.listNamespacedDeployment(namespace);
+    async getDeployment(namespace: string, appName: string): Promise<V1Deployment | undefined> {
+        const allDeployments = await k3s.apps.listNamespacedDeployment(namespace) as { body: V1DeploymentList };
         if (allDeployments.body?.items?.some((item) => item.metadata?.name === appName)) {
-            const res = await k3s.apps.readNamespacedDeployment(appName, namespace);
+            const res = await k3s.apps.readNamespacedDeployment(appName, namespace) as { body: V1Deployment };
             return res.body;
         }
     }
 
-    async getAllDeployments() {
-        const allDeployments = await k3s.apps.listDeploymentForAllNamespaces();
+    async getAllDeployments(): Promise<V1Deployment[]> {
+        const allDeployments = await k3s.apps.listDeploymentForAllNamespaces() as { body: V1DeploymentList };
         return allDeployments.body.items;
     }
 
@@ -367,7 +367,7 @@ class DeploymentService {
         }
 
         // List ReplicaSets in the namespace to find those associated with the deployment
-        const replicaSetsForDeployment = await k3s.apps.listNamespacedReplicaSet(projectId, undefined, undefined, undefined, undefined, `app=${appId}`);
+        const replicaSetsForDeployment = await k3s.apps.listNamespacedReplicaSet(projectId, undefined, undefined, undefined, undefined, `app=${appId}`) as { body: V1ReplicaSetList };
 
         const revisions = replicaSetsForDeployment.body.items.map((rs, index) => {
             let status = this.mapReplicasetToStatus(rs);

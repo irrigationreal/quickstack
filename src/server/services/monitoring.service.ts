@@ -173,7 +173,7 @@ class MonitorService {
         }
         const baseVolumeIds = Array.from(new Set(appVolumes.map(volume => (volume as { sharedVolumeId?: string | null }).sharedVolumeId || volume.id)));
         const pvcNames = new Set(baseVolumeIds.map(id => KubeObjectNameUtils.toPvcName(id)));
-        const pvcFromProject = await k3s.core.listNamespacedPersistentVolumeClaim(projectId);
+        const pvcFromProject = await k3s.core.listNamespacedPersistentVolumeClaim(projectId) as { body: k8s.V1PersistentVolumeClaimList };
         const pvcUsageData: Array<{ pvcName: string, usedBytes: number }> = [];
 
         for (const pvc of pvcFromProject.body.items) {

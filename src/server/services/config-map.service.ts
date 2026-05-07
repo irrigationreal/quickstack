@@ -8,8 +8,8 @@ import { dlog } from "./deployment-logs.service";
 
 class ConfigMapService {
 
-    private async getConfigMapsForApp(projectId: string, appId: string) {
-        const configMaps = await k3s.core.listNamespacedConfigMap(projectId);
+    private async getConfigMapsForApp(projectId: string, appId: string): Promise<k8s.V1ConfigMap[]> {
+        const configMaps = await k3s.core.listNamespacedConfigMap(projectId) as { body: k8s.V1ConfigMapList };
 
         return configMaps.body.items.filter(cm => {
             return cm.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID] === appId;
@@ -79,8 +79,8 @@ class ConfigMapService {
         return { fileVolumeMount, fileVolume };
     }
 
-    async getExistingConfigMap(namespace: string, configMapName: string) {
-        const configMaps = await k3s.core.listNamespacedConfigMap(namespace);
+    async getExistingConfigMap(namespace: string, configMapName: string): Promise<k8s.V1ConfigMap | undefined> {
+        const configMaps = await k3s.core.listNamespacedConfigMap(namespace) as { body: k8s.V1ConfigMapList };
         return configMaps.body.items.find(cm => cm.metadata?.name === configMapName);
     }
 

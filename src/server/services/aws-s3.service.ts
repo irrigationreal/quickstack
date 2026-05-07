@@ -14,7 +14,13 @@ export class S3Service {
             const output = await client.send(new HeadBucketCommand({ Bucket: target.bucketName }));
             return output.$metadata.httpStatusCode === 200;
         } catch (e) {
-            console.log('Error while testing connection to S3 Target', target, e);
+            console.log('Error while testing connection to S3 Target', {
+                id: target.id,
+                name: target.name,
+                endpoint: target.endpoint,
+                bucketName: target.bucketName,
+                region: target.region,
+            }, e);
             return false;
         }
     }

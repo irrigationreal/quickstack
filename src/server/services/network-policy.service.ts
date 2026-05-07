@@ -1,9 +1,13 @@
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1NetworkPolicy, V1NetworkPolicyEgressRule, V1NetworkPolicyIngressRule, V1NetworkPolicyPeer } from "@kubernetes/client-node";
+import { V1NamespaceList, V1NetworkPolicy, V1NetworkPolicyList } from "@kubernetes/client-node";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { Constants } from "../../shared/utils/constants";
 import { appNetworkPolicy, AppNetworkPolicyType } from "@/shared/model/network-policy.model";
+
+type NetworkPolicyManifest = any;
+type NetworkPolicyRule = any;
+type NetworkPolicyPeer = any;
 
 class NetworkPolicyService {
 
@@ -20,7 +24,7 @@ class NetworkPolicyService {
         const ingressPolicy = this.normalizePolicy(app.ingressNetworkPolicy);
         const egressPolicy = this.normalizePolicy(app.egressNetworkPolicy);
 
-        const policy: V1NetworkPolicy = {
+        const policy: NetworkPolicyManifest = {
             apiVersion: "networking.k8s.io/v1",
             kind: "NetworkPolicy",
             metadata: {
@@ -53,10 +57,10 @@ class NetworkPolicyService {
         return parsed.success ? parsed.data : 'ALLOW_ALL';
     }
 
-    private getIngressRules(policyType: AppNetworkPolicyType, nodePorts: { port: number; protocol?: string }[] = []): V1NetworkPolicyIngressRule[] {
-        const rules: V1NetworkPolicyIngressRule[] = [];
+    private getIngressRules(policyType: AppNetworkPolicyType, nodePorts: { port: number; protocol?: string }[] = []): NetworkPolicyRule[] {
+        const rules: NetworkPolicyRule[] = [];
 
-        const traefikFrom: V1NetworkPolicyPeer[] = [
+        const traefikFrom: NetworkPolicyPeer[] = [
             {
                 namespaceSelector: {
                     matchLabels: {
@@ -84,7 +88,7 @@ class NetworkPolicyService {
              }*/
         ];
 
-        const backupPodFrom: V1NetworkPolicyPeer[] = [{
+        const backupPodFrom: NetworkPolicyPeer[] = [{
             podSelector: {
                 matchLabels: {
                     [Constants.QS_ANNOTATION_CONTAINER_TYPE]: Constants.QS_ANNOTATION_CONTAINER_TYPE_DB_BACKUP_JOB
@@ -92,7 +96,7 @@ class NetworkPolicyService {
             }
         }];
 
-        const dbToolPod: V1NetworkPolicyPeer[] = [{
+        const dbToolPod: NetworkPolicyPeer[] = [{
             podSelector: {
                 matchLabels: {
                     [Constants.QS_ANNOTATION_CONTAINER_TYPE]: Constants.QS_ANNOTATION_CONTAINER_TYPE_DB_TOOL
@@ -160,11 +164,11 @@ class NetworkPolicyService {
         return rules;
     }
 
-    private getEgressRules(policyType: AppNetworkPolicyType): V1NetworkPolicyEgressRule[] {
-        const rules: V1NetworkPolicyEgressRule[] = [];
+    private getEgressRules(policyType: AppNetworkPolicyType): NetworkPolicyRule[] {
+        const rules: NetworkPolicyRule[] = [];
 
         // allow DNS (kube-dns/coredns) on UDP/TCP 53
-        const dnsRuleAllow: V1NetworkPolicyEgressRule = {
+        const dnsRuleAllow: NetworkPolicyRule = {
             to: [
                 {
                     namespaceSelector: {
@@ -256,7 +260,7 @@ class NetworkPolicyService {
         await k3s.network.deleteNamespacedNetworkPolicy(policyName, projectId);
     }
 
-    private async applyNetworkPolicy(namespace: string, policyName: string, body: V1NetworkPolicy) {
+    private async applyNetworkPolicy(namespace: string, policyName: string, body: NetworkPolicyManifest) {
         const existing = await this.getExistingNetworkPolicy(namespace, policyName);
         if (existing) {
             await k3s.network.replaceNamespacedNetworkPolicy(policyName, namespace, body);
@@ -265,8 +269,8 @@ class NetworkPolicyService {
         }
     }
 
-    private async getExistingNetworkPolicy(namespace: string, policyName: string) {
-        const allPolicies = await k3s.network.listNamespacedNetworkPolicy(namespace);
+    private async getExistingNetworkPolicy(namespace: string, policyName: string): Promise<V1NetworkPolicy | undefined> {
+        const allPolicies = await k3s.network.listNamespacedNetworkPolicy(namespace) as { body: V1NetworkPolicyList };
         return allPolicies.body.items.find(np => np.metadata?.name === policyName);
     }
 
@@ -274,7 +278,7 @@ class NetworkPolicyService {
         const policyName = KubeObjectNameUtils.toNetworkPolicyName(dbToolAppName);
         const namespace = projectId;
 
-        const policy: V1NetworkPolicy = {
+        const policy: NetworkPolicyManifest = {
             apiVersion: "networking.k8s.io/v1",
             kind: "NetworkPolicy",
             metadata: {
@@ -381,7 +385,7 @@ class NetworkPolicyService {
         const policyName = KubeObjectNameUtils.toNetworkPolicyName(fileBrowserAppName);
         const namespace = projectId;
 
-        const policy: V1NetworkPolicy = {
+        const policy: NetworkPolicyManifest = {
             apiVersion: "networking.k8s.io/v1",
             kind: "NetworkPolicy",
             metadata: {
@@ -438,7 +442,7 @@ class NetworkPolicyService {
     }
 
     async deleteAllNetworkPolicies() {
-        const namespaces = await k3s.core.listNamespace();
+        const namespaces = await k3s.core.listNamespace() as { body: V1NamespaceList };
         let deletedCount = 0;
 
         for (const ns of namespaces.body.items) {
@@ -446,7 +450,7 @@ class NetworkPolicyService {
             if (!namespace) continue;
 
             try {
-                const policies = await k3s.network.listNamespacedNetworkPolicy(namespace);
+                const policies = await k3s.network.listNamespacedNetworkPolicy(namespace) as { body: V1NetworkPolicyList };
                 for (const policy of policies.body.items) {
                     const policyName = policy.metadata?.name;
                     if (policyName) {

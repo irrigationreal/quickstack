@@ -1,5 +1,5 @@
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1Deployment, V1Ingress, V1Service } from "@kubernetes/client-node";
+import { V1Deployment, V1DeploymentList, V1Ingress, V1IngressList, V1PersistentVolumeClaimList, V1Service, V1ServiceList } from "@kubernetes/client-node";
 import namespaceService from "./namespace.service";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import crypto from "crypto";
@@ -66,7 +66,7 @@ class QuickStackService {
         await ingressSetupService.createTraefikRedirectMiddlewareIfNotExist();
 
         const ingressName = KubeObjectNameUtils.getIngressName(this.QUICKSTACK_NAMESPACE);
-        const existingIngresses = await k3s.network.listNamespacedIngress(this.QUICKSTACK_NAMESPACE);
+        const existingIngresses = await k3s.network.listNamespacedIngress(this.QUICKSTACK_NAMESPACE) as { body: V1IngressList };
         const existingIngress = existingIngresses.body.items.find((item) => item.metadata?.name === ingressName);
 
         const ingressDefinition: V1Ingress = {
@@ -217,7 +217,7 @@ class QuickStackService {
             }
         };
 
-        const allServices = await k3s.core.listNamespacedService(this.QUICKSTACK_NAMESPACE);
+        const allServices = await k3s.core.listNamespacedService(this.QUICKSTACK_NAMESPACE) as { body: V1ServiceList };
         const existingService = allServices.body.items.find(s => s.metadata!.name === serviceName);
         if (existingService) {
             console.warn('Service already exists, deleting and recreating it');
@@ -232,7 +232,7 @@ class QuickStackService {
 
     private async createOrUpdatePvc() {
         const pvcName = KubeObjectNameUtils.toPvcName(this.QUICKSTACK_DEPLOYMENT_NAME);
-        const allPvcs = await k3s.core.listNamespacedPersistentVolumeClaim(this.QUICKSTACK_NAMESPACE);
+        const allPvcs = await k3s.core.listNamespacedPersistentVolumeClaim(this.QUICKSTACK_NAMESPACE) as { body: V1PersistentVolumeClaimList };
         const existingPvc = allPvcs.body.items.find(p => p.metadata!.name === pvcName);
 
         const storageClassName = existingPvc?.spec?.storageClassName || 'longhorn';
@@ -360,7 +360,7 @@ class QuickStackService {
     }
 
     async getExistingDeployment() {
-        const allDeployments = await k3s.apps.listNamespacedDeployment(this.QUICKSTACK_NAMESPACE);
+        const allDeployments = await k3s.apps.listNamespacedDeployment(this.QUICKSTACK_NAMESPACE) as { body: V1DeploymentList };
         const existingDeployments = allDeployments.body.items.find(d => d.metadata!.name === this.QUICKSTACK_DEPLOYMENT_NAME);
         const nextAuthSecret = existingDeployments?.spec?.template?.spec?.containers?.[0].env?.find(e => e.name === 'NEXTAUTH_SECRET')?.value;
         const nextAuthHostname = existingDeployments?.spec?.template?.spec?.containers?.[0].env?.find(e => e.name === 'NEXTAUTH_URL')?.value;

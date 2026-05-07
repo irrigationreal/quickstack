@@ -1,7 +1,8 @@
 import fsPromises from 'fs/promises';
-import fs, { read } from 'fs';
+import fs from 'fs';
 import { PathUtils } from '../utils/path.utils';
 import { FsUtils } from '../utils/fs.utils';
+import { ServiceException } from '@/shared/model/service.exception.model';
 
 class DeploymentLogService {
 
@@ -37,6 +38,31 @@ class DeploymentLogService {
             this.writeLogs(deploymentId, `[Error]: ${(ex as any)?.message}`);
             throw ex;
         }
+    }
+
+    async getAppIdForDeploymentId(deploymentId: string) {
+        await FsUtils.createDirIfNotExistsAsync(PathUtils.deploymentLogsPath, true);
+        const logFilePath = PathUtils.appDeploymentLogFile(deploymentId);
+        if (!await FsUtils.fileExists(logFilePath)) {
+            throw new ServiceException(`No deployment log found for deployment ${deploymentId}.`);
+        }
+
+        const file = await fsPromises.open(logFilePath, 'r');
+        const buffer = Buffer.alloc(4096);
+        let bytesRead = 0;
+        try {
+            const readResult = await file.read(buffer, 0, buffer.length, 0);
+            bytesRead = readResult.bytesRead;
+        } finally {
+            await file.close();
+        }
+
+        const logHeader = buffer.subarray(0, bytesRead).toString('utf-8');
+        const appId = logHeader.match(/^\s*App:\s*(\S+)\s*$/m)?.[1];
+        if (!appId) {
+            throw new ServiceException(`Unable to determine the app for deployment ${deploymentId}.`);
+        }
+        return appId;
     }
 
     async getLogsStream(deploymentId: string, streamedData: (data: string) => void) {

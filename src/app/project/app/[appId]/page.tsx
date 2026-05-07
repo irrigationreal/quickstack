@@ -12,10 +12,11 @@ export default async function AppPage({
     searchParams,
     params
 }: {
-    searchParams?: { [key: string]: string | undefined };
-    params: { appId: string }
+    searchParams?: Promise<{ [key: string]: string | undefined }>;
+    params: Promise<{ appId: string }>
 }) {
-    const appId = params?.appId;
+    const { appId } = await params;
+    const resolvedSearchParams = await searchParams;
     if (!appId) {
         return <p>Could not find app with id {appId}</p>
     }
@@ -38,8 +39,8 @@ export default async function AppPage({
             gitSshPublicKey={gitSshPublicKey}
             app={app}
             nodesInfo={nodesInfo}
-            tabName={searchParams?.tabName ?? 'overview'} />
-        <AppBreadcrumbs app={app} apps={apps} tabName={searchParams?.tabName} />
+            tabName={resolvedSearchParams?.tabName ?? 'overview'} />
+        <AppBreadcrumbs app={app} apps={apps} tabName={resolvedSearchParams?.tabName} />
     </>
     )
 }

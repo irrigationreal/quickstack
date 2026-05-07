@@ -153,8 +153,8 @@ class K3sUpdateService {
                 ]);
 
                 return {
-                    serverPlan: serverPlan.body,
-                    agentPlan: agentPlan.body
+                    serverPlan,
+                    agentPlan
                 };
             } catch (error) {
                 // Plans don't exist

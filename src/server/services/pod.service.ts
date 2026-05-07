@@ -2,6 +2,8 @@ import { PodsInfoModel } from "@/shared/model/pods-info.model";
 import k3s from "../adapter/kubernetes-api.adapter";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import standalonePodService from "./standalone-services/standalone-pod.service";
+import { Constants } from "@/shared/utils/constants";
+import { V1PodList } from "@kubernetes/client-node";
 
 class PodService {
 
@@ -23,7 +25,9 @@ class PodService {
         const res = await k3s.core.readNamespacedPod(podName, projectId);
         return {
             podName: res.body.metadata?.name!,
-            containerName: res.body.spec?.containers?.[0].name!
+            containerName: res.body.spec?.containers?.[0].name!,
+            appId: res.body.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID] ?? res.body.metadata?.labels?.app,
+            projectId: res.body.metadata?.annotations?.[Constants.QS_ANNOTATION_PROJECT_ID] ?? res.body.metadata?.namespace,
         } as PodsInfoModel;
     }
 
@@ -52,7 +56,7 @@ class PodService {
     }
 
     async deleteRestorePodIfExists(namespace: string, name: string) {
-        const existingPods = await k3s.core.listNamespacedPod(namespace);
+        const existingPods = await k3s.core.listNamespacedPod(namespace) as { body: V1PodList };
         const pod = existingPods.body.items.find((item) => item.metadata?.labels?.app === name);
         if (pod) {
             await k3s.core.deleteNamespacedPod(name, namespace);

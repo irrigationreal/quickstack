@@ -1,5 +1,5 @@
 import * as k8s from '@kubernetes/client-node';
-import { V1Job } from '@kubernetes/client-node';
+import { V1Job, V1JobList } from '@kubernetes/client-node';
 import { Constants } from '../../../shared/utils/constants';
 import k3s from '../../adapter/kubernetes-api.adapter';
 import buildService from '../build.service';
@@ -54,7 +54,7 @@ class BuildWatchService {
     private async scanExistingJobs() {
         console.log('[BuildWatch] Scanning existing build jobs...');
         try {
-            const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE);
+            const jobs = await k3s.batch.listNamespacedJob(BUILD_NAMESPACE) as { body: V1JobList };
             for (const job of jobs.body.items) {
                 const jobName = job.metadata?.name;
                 if (!jobName) continue;

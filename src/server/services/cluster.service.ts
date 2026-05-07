@@ -12,7 +12,7 @@ class ClusterService {
 
     async getNodeInfo(): Promise<NodeInfoModel[]> {
         return await unstable_cache(async () => {
-            const nodeReturnInfo = await k3s.core.listNode();
+            const nodeReturnInfo = await k3s.core.listNode() as { body: k8s.V1NodeList };
             return nodeReturnInfo.body.items.map((node) => {
                 return {
                     name: node.metadata?.name!,
@@ -58,7 +58,7 @@ class ClusterService {
 
             if (!schedulable) {
                 // delete all pods on node
-                const pods = await k3s.core.listPodForAllNamespaces();
+                const pods = await k3s.core.listPodForAllNamespaces() as { body: k8s.V1PodList };
                 for (const pod of pods.body.items) {
                     if (pod.spec?.nodeName === nodeName) {
                         await k3s.core.deleteNamespacedPod(pod.metadata?.name!, pod.metadata?.namespace!);

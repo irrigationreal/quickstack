@@ -1,10 +1,9 @@
-import buildService from "@/server/services/build.service";
 import { z } from "zod";
 import stream from "stream";
 import k3s from "@/server/adapter/kubernetes-api.adapter";
-import { simpleRoute } from "@/server/utils/action-wrapper.utils";
+import { isAuthorizedReadForApp, simpleRoute } from "@/server/utils/action-wrapper.utils";
 import podService from "@/server/services/pod.service";
-import { BUILD_NAMESPACE } from "@/server/services/registry.service";
+import { ServiceException } from "@/shared/model/service.exception.model";
 
 // Prevents this route's response from being cached
 export const dynamic = "force-dynamic";
@@ -25,6 +24,10 @@ export async function POST(request: Request) {
         let streamKey;
         if (namespace && podName) {
             pod = await podService.getPodInfoByName(namespace, podName);
+            if (!pod.appId) {
+                throw new ServiceException('Unable to determine the app for this pod.');
+            }
+            await isAuthorizedReadForApp(pod.appId);
             streamKey = `${namespace}_${podName}`;
 
         } else {

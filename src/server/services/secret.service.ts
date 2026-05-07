@@ -1,4 +1,4 @@
-import { V1Secret } from "@kubernetes/client-node";
+import { V1Secret, V1SecretList } from "@kubernetes/client-node";
 import k3s from "../adapter/kubernetes-api.adapter";
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
@@ -101,7 +101,7 @@ class SecretService {
     }
 
     async getExistingSecret(namespace: string, secretName: string) {
-        const existingSecrets = await k3s.core.listNamespacedSecret(namespace);
+        const existingSecrets = await k3s.core.listNamespacedSecret(namespace) as { body: V1SecretList };
         const existingSecret = existingSecrets.body.items.find(s => s.metadata?.name === secretName);
         return existingSecret;
     }

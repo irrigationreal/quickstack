@@ -1,5 +1,5 @@
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1Deployment } from "@kubernetes/client-node";
+import { V1ConfigMapList, V1Deployment, V1DeploymentList, V1PersistentVolumeClaimList, V1ServiceList } from "@kubernetes/client-node";
 import namespaceService from "./namespace.service";
 import podService from "./pod.service";
 import registryApiAdapter from "../adapter/registry-api.adapter";
@@ -82,7 +82,7 @@ class RegistryService {
         // Always update the ConfigMap so storage settings are never stale
         await this.createOrUpdateRegistryConfigMap(s3Target);
 
-        const deployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE);
+        const deployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE) as { body: V1DeploymentList };
         if (deployments.body.items.length > 0 && !forceDeploy) {
             return;
         }
@@ -128,7 +128,7 @@ class RegistryService {
             },
         };
 
-        const listRes = await k3s.core.listNamespacedPersistentVolumeClaim(BUILD_NAMESPACE);
+        const listRes = await k3s.core.listNamespacedPersistentVolumeClaim(BUILD_NAMESPACE) as { body: V1PersistentVolumeClaimList };
         if (listRes.body.items.find(pvc => pvc.metadata?.name === REGISTRY_PVC_NAME)) {
             console.log("PVC already exists, skipping creation...");
             return;
@@ -161,7 +161,7 @@ class RegistryService {
             },
         };
 
-        const existingServices = await k3s.core.listNamespacedService(BUILD_NAMESPACE);
+        const existingServices = await k3s.core.listNamespacedService(BUILD_NAMESPACE) as { body: V1ServiceList };
         if (existingServices.body.items.find(svc => svc.metadata?.name === REGISTRY_SVC_NAME)) {
             console.log("Service already exists, deleting and recreating...");
             await k3s.core.deleteNamespacedService(REGISTRY_SVC_NAME, BUILD_NAMESPACE);
@@ -250,7 +250,7 @@ class RegistryService {
             },
         };
 
-        const existingDeployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE);
+        const existingDeployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE) as { body: V1DeploymentList };
         if (existingDeployments.body.items.find(dep => dep.metadata?.name === deploymentName)) {
             console.log("Deployment already exists, deleting and recreating...");
             await k3s.apps.deleteNamespacedDeployment(deploymentName, BUILD_NAMESPACE);
@@ -315,7 +315,7 @@ http:
 `
             },
         };
-        const existingConfigMaps = await k3s.core.listNamespacedConfigMap(BUILD_NAMESPACE);
+        const existingConfigMaps = await k3s.core.listNamespacedConfigMap(BUILD_NAMESPACE) as { body: V1ConfigMapList };
         if (existingConfigMaps.body.items.find(cm => cm.metadata?.name === REGISTRY_CONFIG_MAP_NAME)) {
             console.log("ConfigMap already exists, deleting and recreating...");
             await k3s.core.deleteNamespacedConfigMap(REGISTRY_CONFIG_MAP_NAME, BUILD_NAMESPACE);
