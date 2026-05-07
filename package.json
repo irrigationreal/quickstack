@@ -86,12 +86,27 @@
   },
   "resolutions": {
     "@babel/runtime": "^7.26.10",
+    "@eslint/plugin-kit": "^0.3.4",
     "@hono/node-server": "^1.19.13",
     "diff": "^4.0.4",
+    "eslint/@eslint/config-array/minimatch": "^3.1.4",
+    "eslint/@eslint/config-array/minimatch/brace-expansion": "^1.1.13",
+    "eslint/@eslint/eslintrc/ajv": "^6.14.0",
+    "eslint/ajv": "^6.14.0",
+    "eslint/file-entry-cache/flat-cache/flatted": "^3.4.2",
+    "eslint/minimatch": "^3.1.4",
+    "eslint/minimatch/brace-expansion": "^1.1.13",
+    "eslint-config-next/**/picomatch": "^2.3.2",
     "js-yaml": "^4.1.1",
     "postcss": "^8.5.10",
     "recharts/lodash": "^4.18.1",
-    "socket.io-parser": "^4.2.6"
+    "socket.io-parser": "^4.2.6",
+    "tailwindcss/**/picomatch": "^2.3.2",
+    "tailwindcss/postcss-load-config/yaml": "^2.8.3",
+    "tailwindcss/sucrase/glob": "^10.5.0",
+    "zod-prisma/@prisma/generator-helper/cross-spawn": "^7.0.5",
+    "zod-prisma/ts-morph/@ts-morph/common/minimatch": "^3.1.4",
+    "zod-prisma/ts-morph/@ts-morph/common/minimatch/brace-expansion": "^1.1.13"
   },
   "devDependencies": {
     "@testcontainers/k3s": "^11.14.0",
