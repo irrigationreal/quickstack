@@ -1,6 +1,6 @@
 import * as z from "zod"
 
-import { CompleteUserGroup, RelatedUserGroupModel, CompleteAccount, RelatedAccountModel, CompleteSession, RelatedSessionModel, CompleteAuditEvent, RelatedAuditEventModel, CompleteDeploymentRecord, RelatedDeploymentRecordModel, CompleteAuthenticator, RelatedAuthenticatorModel } from "./index"
+import { CompleteUserGroup, RelatedUserGroupModel, CompleteAccount, RelatedAccountModel, CompleteSession, RelatedSessionModel, CompleteAuditEvent, RelatedAuditEventModel, CompleteDeploymentRecord, RelatedDeploymentRecordModel, CompleteApiKey, RelatedApiKeyModel, CompleteAuthenticator, RelatedAuthenticatorModel } from "./index"
 
 export const UserModel = z.object({
   id: z.string(),
@@ -22,6 +22,7 @@ export interface CompleteUser extends z.infer<typeof UserModel> {
   sessions: CompleteSession[]
   auditEvents: CompleteAuditEvent[]
   deploymentRecords: CompleteDeploymentRecord[]
+  apiKeys: CompleteApiKey[]
   Authenticator: CompleteAuthenticator[]
 }
 
@@ -36,5 +37,6 @@ export const RelatedUserModel: z.ZodSchema<CompleteUser> = z.lazy(() => UserMode
   sessions: RelatedSessionModel.array(),
   auditEvents: RelatedAuditEventModel.array(),
   deploymentRecords: RelatedDeploymentRecordModel.array(),
+  apiKeys: RelatedApiKeyModel.array(),
   Authenticator: RelatedAuthenticatorModel.array(),
 }))

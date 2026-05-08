@@ -6,6 +6,8 @@ import userService from "@/server/services/user.service";
 import { getAuthUserSession, saveFormAction, simpleAction } from "@/server/utils/action-wrapper.utils";
 import { TotpModel, totpZodModel } from "@/shared/model/totp.model";
 import { SuccessActionResult } from "@/shared/model/server-action-error-return.model";
+import apiKeyService from "@/server/services/api-key.service";
+import { ApiKeyCreateModel, apiKeyCreateZodModel } from "@/shared/model/api-key.model";
 
 export const changePassword = async (prevState: any, inputData: ProfilePasswordChangeModel) =>
   saveFormAction(inputData, profilePasswordChangeZodModel, async (validatedData) => {
@@ -38,4 +40,18 @@ export const deactivate2fa = async () =>
     console.log(session)
     await userService.deactivate2fa(session.email);
     return new SuccessActionResult(undefined, '2FA settings deactivated successfully');
+  });
+
+export const createApiKey = async (prevState: any, inputData: ApiKeyCreateModel) =>
+  saveFormAction(inputData, apiKeyCreateZodModel, async (validatedData) => {
+    const session = await getAuthUserSession();
+    const result = await apiKeyService.createForUser(session.id, validatedData);
+    return new SuccessActionResult(result, 'API key created. Copy it now; it will not be shown again.');
+  });
+
+export const revokeApiKey = async (apiKeyId: string) =>
+  simpleAction(async () => {
+    const session = await getAuthUserSession();
+    await apiKeyService.revokeForUser(session.id, apiKeyId);
+    return new SuccessActionResult(undefined, 'API key revoked.');
   });

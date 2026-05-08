@@ -75,6 +75,7 @@ vi.mock('@/server/services/config-map.service', () => ({
 vi.mock('@/server/services/secret.service', () => ({
     default: {
         createOrUpdateDockerPullSecret: vi.fn().mockResolvedValue(undefined),
+        createOrUpdateAppSecretEnvVars: vi.fn().mockResolvedValue(undefined),
         delteUnusedSecrets: vi.fn(),
     },
 }));
@@ -201,6 +202,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

@@ -1,0 +1,114 @@
+import appService from "./app.service";
+import appSecretEnvService from "./app-secret-env.service";
+import auditService, { AuditActor } from "./audit.service";
+import { AppTemplateUtils } from "../utils/app-template.utils";
+import { getPostgresAppTemplate } from "@/shared/templates/databases/postgres.template";
+import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
+import { ServiceException } from "@/shared/model/service.exception.model";
+import { Prisma } from "@prisma/client";
+import dataAccess from "../adapter/db.client";
+
+class QuickStackManagedService {
+    async createPostgres(input: {
+        projectId: string;
+        name?: string;
+        databaseName?: string;
+        username?: string;
+        actor: AuditActor;
+    }) {
+        const dbPassword = AppTemplateUtils.generateStrongPasswort(35);
+        const template = getPostgresAppTemplate({
+            appName: input.name || 'PostgreSQL',
+            dbName: input.databaseName || 'postgresdb',
+            dbUsername: input.username || 'postgresuser',
+            dbPassword,
+        });
+        const mappedApp = AppTemplateUtils.mapTemplateInputValuesToApp(template, template.inputSettings);
+
+        const appId = await dataAccess.client.$transaction(async (tx: Prisma.TransactionClient) => {
+            const created = await appService.save({
+                ...mappedApp,
+                projectId: input.projectId,
+                id: KubeObjectNameUtils.toAppId(input.name || 'postgres'),
+            }, false, tx);
+            for (const volume of template.appVolumes) {
+                await appService.saveVolume({ ...volume, appId: created.id }, tx);
+            }
+            for (const port of template.appPorts) {
+                await appService.savePort({ ...port, appId: created.id }, tx);
+            }
+            return created.id;
+        });
+
+        const databaseApp = await appService.getExtendedById(appId, false);
+        const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(databaseApp);
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_POSTGRES_CREATED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: databaseApp.id,
+            projectId: databaseApp.projectId,
+            appId: databaseApp.id,
+            appName: databaseApp.name,
+            metadata: {
+                databaseName: databaseInfo.databaseName,
+                hostname: databaseInfo.hostname,
+                port: databaseInfo.port,
+            },
+        });
+        return { databaseApp, databaseInfo };
+    }
+
+    async attachPostgres(input: {
+        databaseAppId: string;
+        appId: string;
+        secretName?: string;
+        actor: AuditActor;
+    }) {
+        const [databaseApp, app] = await Promise.all([
+            appService.getExtendedById(input.databaseAppId, false),
+            appService.getById(input.appId),
+        ]);
+        if (databaseApp.appType !== 'POSTGRES') {
+            throw new ServiceException('Managed resource is not a Postgres app.');
+        }
+        if (databaseApp.projectId !== app.projectId) {
+            throw new ServiceException('Managed Postgres can only be attached to apps in the same project.');
+        }
+        const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(databaseApp);
+        const secretName = input.secretName || 'DATABASE_URL';
+        await appSecretEnvService.upsertMany({
+            app,
+            secrets: [{ name: secretName, value: databaseInfo.internalConnectionUrl }],
+            actor: input.actor,
+        });
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_POSTGRES_ATTACHED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: input.appId,
+            projectId: app.projectId,
+            appId: app.id,
+            appName: app.name,
+            metadata: {
+                databaseAppId: databaseApp.id,
+                secretName,
+            },
+        });
+        return {
+            appId: app.id,
+            databaseAppId: databaseApp.id,
+            secretName,
+            database: {
+                databaseName: databaseInfo.databaseName,
+                hostname: databaseInfo.hostname,
+                port: databaseInfo.port,
+            },
+        };
+    }
+}
+
+const quickStackManagedService = new QuickStackManagedService();
+export default quickStackManagedService;

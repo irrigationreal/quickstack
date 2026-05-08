@@ -1,5 +1,5 @@
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1ConfigMapList, V1Deployment, V1DeploymentList, V1PersistentVolumeClaimList, V1ServiceList } from "@kubernetes/client-node";
+import { V1ConfigMapList, V1Deployment, V1DeploymentList, V1NetworkPolicy, V1NetworkPolicyList, V1PersistentVolumeClaimList, V1ServiceList } from "@kubernetes/client-node";
 import namespaceService from "./namespace.service";
 import podService from "./pod.service";
 import registryApiAdapter from "../adapter/registry-api.adapter";
@@ -15,6 +15,7 @@ const REGISTRY_CONTAINER_PORT = 5000;
 const REGISTRY_SVC_NAME = 'registry-svc';
 const REGISTRY_PVC_NAME = 'registry-data-pvc';
 const REGISTRY_CONFIG_MAP_NAME = 'registry-config-map';
+const REGISTRY_NETWORK_POLICY_NAME = 'registry-ingress-policy';
 export const BUILD_NAMESPACE = "registry-and-build";
 export const REGISTRY_URL_EXTERNAL = `localhost:${REGISTRY_NODE_PORT}`;
 export const REGISTRY_URL_INTERNAL = `${REGISTRY_SVC_NAME}.${BUILD_NAMESPACE}.svc.cluster.local:${REGISTRY_CONTAINER_PORT}`
@@ -72,6 +73,11 @@ class RegistryService {
         return `${REGISTRY_URL_EXTERNAL}/${appId}:latest`;
     }
 
+    createManagedQuickDeployImageUrl(appId: string, contentHash: string, buildId: string) {
+        const contentHashPrefix = contentHash.replace(/^sha256:/, '').slice(0, 16);
+        return `${REGISTRY_URL_INTERNAL}/${appId}:qd-${contentHashPrefix}-${buildId.slice(0, 8)}`;
+    }
+
     async deployRegistry(registryLocation: string, forceDeploy = false) {
         const useLocalStorage = registryLocation === Constants.INTERNAL_REGISTRY_LOCATION;
         const s3Target = useLocalStorage ? undefined : await s3TargetService.getById(registryLocation!);
@@ -79,8 +85,9 @@ class RegistryService {
         console.log("Ensuring namespace is created...");
         await namespaceService.createNamespaceIfNotExists(BUILD_NAMESPACE);
 
-        // Always update the ConfigMap so storage settings are never stale
+        // Always update the ConfigMap and NetworkPolicy so storage and registry ingress settings are never stale
         await this.createOrUpdateRegistryConfigMap(s3Target);
+        await this.createOrUpdateRegistryNetworkPolicy();
 
         const deployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE) as { body: V1DeploymentList };
         if (deployments.body.items.length > 0 && !forceDeploy) {
@@ -168,6 +175,55 @@ class RegistryService {
         }
 
         await k3s.core.createNamespacedService(BUILD_NAMESPACE, serviceManifest);
+    }
+
+    private async createOrUpdateRegistryNetworkPolicy() {
+        console.log("Creating Registry NetworkPolicy...");
+        const networkPolicyManifest: V1NetworkPolicy = {
+            apiVersion: 'networking.k8s.io/v1',
+            kind: 'NetworkPolicy',
+            metadata: {
+                name: REGISTRY_NETWORK_POLICY_NAME,
+                namespace: BUILD_NAMESPACE,
+            },
+            spec: {
+                podSelector: {
+                    matchLabels: {
+                        app: 'registry',
+                    },
+                },
+                policyTypes: ['Ingress'],
+                ingress: [
+                    {
+                        _from: [
+                            {
+                                podSelector: {},
+                            },
+                            {
+                                namespaceSelector: {
+                                    matchLabels: {
+                                        'kubernetes.io/metadata.name': 'quickstack',
+                                    },
+                                },
+                                podSelector: {
+                                    matchLabels: {
+                                        app: 'quickstack',
+                                    },
+                                },
+                            },
+                        ],
+                        ports: [{ protocol: 'TCP', port: REGISTRY_CONTAINER_PORT as any }],
+                    },
+                ],
+            },
+        };
+
+        const existingNetworkPolicies = await k3s.network.listNamespacedNetworkPolicy(BUILD_NAMESPACE) as { body: V1NetworkPolicyList };
+        if (existingNetworkPolicies.body.items.find(policy => policy.metadata?.name === REGISTRY_NETWORK_POLICY_NAME)) {
+            await k3s.network.replaceNamespacedNetworkPolicy(REGISTRY_NETWORK_POLICY_NAME, BUILD_NAMESPACE, networkPolicyManifest);
+            return;
+        }
+        await k3s.network.createNamespacedNetworkPolicy(BUILD_NAMESPACE, networkPolicyManifest);
     }
 
     private async createOrUpdateRegistryDeployment(useLocalStorage = true) {

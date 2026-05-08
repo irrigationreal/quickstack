@@ -247,6 +247,7 @@ function createNetworkPolicyApp(overrides: Pick<AppExtendedModel,
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
         ...overrides,
     };
 }
@@ -313,6 +314,7 @@ function createNginxApp(): AppExtendedModel {
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
         createdAt: new Date(),
         updatedAt: new Date(),
     };

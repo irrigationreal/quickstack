@@ -2,8 +2,29 @@ import { V1Secret, V1SecretList } from "@kubernetes/client-node";
 import k3s from "../adapter/kubernetes-api.adapter";
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
+import appSecretEnvService from "./app-secret-env.service";
 
 class SecretService {
+
+    async createOrUpdateAppSecretEnvVars(app: AppExtendedModel) {
+        const secretName = KubeObjectNameUtils.toAppSecretEnvVarsName(app.id);
+        if (!app.appSecretEnvVars || app.appSecretEnvVars.length === 0) {
+            await this.deleteSecretIfExists(app.projectId, secretName);
+            return;
+        }
+
+        const data = Object.fromEntries(app.appSecretEnvVars.map(secretEnvVar => [
+            secretEnvVar.name,
+            Buffer.from(appSecretEnvService.decryptForKubernetes(secretEnvVar.encryptedValue)).toString('base64'),
+        ]));
+
+        await this.saveSecret(app.projectId, secretName, {
+            metadata: { name: secretName },
+            data,
+            type: 'Opaque',
+        });
+        return secretName;
+    }
 
     async createOrUpdateDockerPullSecret(app: AppExtendedModel) {
         if (this.appNeedsNoSecret(app)) {

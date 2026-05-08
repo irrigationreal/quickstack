@@ -12,6 +12,8 @@ export const DeploymentRecordModel = z.object({
   actorEmail: z.string(),
   actorType: z.string(),
   trigger: z.string(),
+  apiKeyId: z.string().nullish(),
+  apiKeyName: z.string().nullish(),
   forceBuild: z.boolean(),
   sourceType: z.string().nullish(),
   buildMethod: z.string().nullish(),

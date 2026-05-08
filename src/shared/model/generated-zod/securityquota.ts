@@ -13,6 +13,10 @@ export const SecurityQuotaModel = z.object({
   maxTotalCpuLimitMillicoresPerProject: z.number().int().nullish(),
   maxDeploysPerUserPerHour: z.number().int().nullish(),
   maxDeploysPerAppPerHour: z.number().int().nullish(),
+  maxQuickDeployUploadBytes: z.number().int().nullish(),
+  maxQuickDeployUploadBytesPerHour: z.number().int().nullish(),
+  maxQuickDeployBuildsPerUserPerHour: z.number().int().nullish(),
+  maxConcurrentQuickDeployBuilds: z.number().int().nullish(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })

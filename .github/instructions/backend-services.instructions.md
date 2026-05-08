@@ -144,12 +144,12 @@ For form validation errors, throw `FormValidationException` with field-level err
 - **SQLite** database at `storage/db/data.db` (using `@prisma/adapter-better-sqlite3`)
 - Schema: `prisma/schema.prisma`
 - Zod schemas auto-generated to `src/shared/model/generated-zod/`
-- After schema changes: **`yarn prisma-migrate`** (runs `prisma migrate dev` + fixes Zod imports via `fix-wrong-zod-imports.js`)
+- After schema changes: **`pnpm prisma-migrate`** (runs `prisma migrate dev` + fixes Zod imports via `fix-wrong-zod-imports.js`)
 - Access via `dataAccess.client` for queries
 - Transactions: `dataAccess.client.$transaction(async (tx) => { ... })`
 - Batch updates: `dataAccess.updateManyItems()` and `dataAccess.updateManyItemsWithExistingTransaction()`
 
-**Critical**: After Prisma schema changes, `yarn prisma-migrate` automatically fixes incorrect Zod imports that `zod-prisma` generator produces.
+**Critical**: After Prisma schema changes, `pnpm prisma-migrate` automatically fixes incorrect Zod imports that `zod-prisma` generator produces.
 
 ## Kubernetes Naming Conventions
 
@@ -221,4 +221,4 @@ Always use `Tags.*` helpers — never hardcode tag values.
 3. QuickStack initialization (`quickStackService.initializeQuickStack()`)
 4. Standalone service startup (backups, maintenance, password changes, app logs)
 
-Run with `yarn dev-live` (builds TypeScript from `tsconfig.server.json` → `dist/server.js`).
+Run with `pnpm dev-live` (builds TypeScript from `tsconfig.server.json` → `dist/server.js`).

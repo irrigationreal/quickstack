@@ -73,6 +73,10 @@ export class KubeObjectNameUtils {
         return `secret-${id}`;
     }
 
+    static toAppSecretEnvVarsName(appId: string): `env-${string}` {
+        return `env-${appId}`;
+    }
+
     static toDbGateId(appId: string): `dbgate-${string}` {
         return `dbgate-${appId}`;
     }

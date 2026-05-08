@@ -11,8 +11,8 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Install dependencies
-COPY yarn.lock package.json ./
-RUN yarn install
+COPY pnpm-lock.yaml package.json ./
+RUN corepack enable && corepack pnpm install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -23,8 +23,8 @@ COPY . .
 # Dummy Database URL for Prisma generation
 ENV DATABASE_URL="file:./dev.db"
 
-RUN yarn run prisma-generate-build
-RUN yarn run build
+RUN corepack pnpm run prisma-generate-build
+RUN corepack pnpm run build
 RUN rm -rf ./next/standalone
 
 # Production image, copy all the files and run next

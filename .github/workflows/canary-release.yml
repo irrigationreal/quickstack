@@ -25,17 +25,16 @@ jobs:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Enable Corepack/Yarn
+      - name: Enable Corepack/pnpm
         run: |
           corepack enable
-          corepack prepare yarn@stable --activate
-          yarn --version
+          corepack pnpm --version
 
       - name: Install dependencies for backend
-        run: yarn install && yarn run prisma-generate
+        run: corepack pnpm install --frozen-lockfile && corepack pnpm run prisma-generate
 
       - name: Run tests for backend
-        run: yarn test
+        run: corepack pnpm test
 
   build-and-push-amd64:
     runs-on: ubuntu-24.04

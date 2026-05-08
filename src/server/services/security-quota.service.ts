@@ -54,6 +54,10 @@ class SecurityQuotaService {
             maxTotalCpuLimitMillicoresPerProject: quota?.maxTotalCpuLimitMillicoresPerProject ?? undefined,
             maxDeploysPerUserPerHour: quota?.maxDeploysPerUserPerHour ?? undefined,
             maxDeploysPerAppPerHour: quota?.maxDeploysPerAppPerHour ?? undefined,
+            maxQuickDeployUploadBytes: quota?.maxQuickDeployUploadBytes ?? undefined,
+            maxQuickDeployUploadBytesPerHour: quota?.maxQuickDeployUploadBytesPerHour ?? undefined,
+            maxQuickDeployBuildsPerUserPerHour: quota?.maxQuickDeployBuildsPerUserPerHour ?? undefined,
+            maxConcurrentQuickDeployBuilds: quota?.maxConcurrentQuickDeployBuilds ?? undefined,
         };
     }
 
@@ -73,6 +77,10 @@ class SecurityQuotaService {
                 maxTotalCpuLimitMillicoresPerProject: input.maxTotalCpuLimitMillicoresPerProject ?? null,
                 maxDeploysPerUserPerHour: input.maxDeploysPerUserPerHour ?? null,
                 maxDeploysPerAppPerHour: input.maxDeploysPerAppPerHour ?? null,
+                maxQuickDeployUploadBytes: input.maxQuickDeployUploadBytes ?? null,
+                maxQuickDeployUploadBytesPerHour: input.maxQuickDeployUploadBytesPerHour ?? null,
+                maxQuickDeployBuildsPerUserPerHour: input.maxQuickDeployBuildsPerUserPerHour ?? null,
+                maxConcurrentQuickDeployBuilds: input.maxConcurrentQuickDeployBuilds ?? null,
             },
             create: {
                 id: GLOBAL_QUOTA_ID,
@@ -85,6 +93,10 @@ class SecurityQuotaService {
                 maxTotalCpuLimitMillicoresPerProject: input.maxTotalCpuLimitMillicoresPerProject ?? null,
                 maxDeploysPerUserPerHour: input.maxDeploysPerUserPerHour ?? null,
                 maxDeploysPerAppPerHour: input.maxDeploysPerAppPerHour ?? null,
+                maxQuickDeployUploadBytes: input.maxQuickDeployUploadBytes ?? null,
+                maxQuickDeployUploadBytesPerHour: input.maxQuickDeployUploadBytesPerHour ?? null,
+                maxQuickDeployBuildsPerUserPerHour: input.maxQuickDeployBuildsPerUserPerHour ?? null,
+                maxConcurrentQuickDeployBuilds: input.maxConcurrentQuickDeployBuilds ?? null,
             }
         });
         revalidateTag(Tags.securityQuotas());
@@ -167,13 +179,57 @@ class SecurityQuotaService {
         }
     }
 
+    private async incrementHourlyQuota(context: {
+        scopeType: string;
+        scopeId: string;
+        limit: number;
+        incrementBy?: number;
+        tx: Prisma.TransactionClient;
+        message: string;
+    }) {
+        const windowStart = startOfCurrentHour();
+        await context.tx.deployQuotaWindow.upsert({
+            where: {
+                scopeType_scopeId_windowStart: {
+                    scopeType: context.scopeType,
+                    scopeId: context.scopeId,
+                    windowStart,
+                }
+            },
+            update: {},
+            create: {
+                scopeType: context.scopeType,
+                scopeId: context.scopeId,
+                windowStart,
+                count: 0,
+            }
+        });
+        const updated = await context.tx.deployQuotaWindow.updateMany({
+            where: {
+                scopeType: context.scopeType,
+                scopeId: context.scopeId,
+                windowStart,
+                count: {
+                    lte: context.limit - (context.incrementBy ?? 1)
+                }
+            },
+            data: {
+                count: {
+                    increment: context.incrementBy ?? 1
+                }
+            }
+        });
+        if (updated.count !== 1) {
+            throw new ServiceException(context.message);
+        }
+    }
+
     async reserveDeployQuota(context: {
         actor: DeployQuotaActorContext;
         appId: string;
         quota: SecurityQuota | null;
         tx: Prisma.TransactionClient;
     }) {
-        const windowStart = startOfCurrentHour();
         const reservations: Array<{ scopeType: string; scopeId: string; limit: number }> = [];
         const perAppLimit = boundedPositiveLimit(context.quota?.maxDeploysPerAppPerHour);
         if (perAppLimit) {
@@ -185,39 +241,66 @@ class SecurityQuotaService {
         }
 
         for (const reservation of reservations) {
-            await context.tx.deployQuotaWindow.upsert({
+            await this.incrementHourlyQuota({
+                ...reservation,
+                tx: context.tx,
+                message: `${reservation.scopeType.toLowerCase()} deploy quota exceeded. Limit is ${reservation.limit} deploy(s) per hour.`,
+            });
+        }
+    }
+
+    async reserveQuickDeployUploadQuota(context: {
+        actor: DeployQuotaActorContext;
+        projectId: string;
+        uploadBytes: number;
+        tx: Prisma.TransactionClient;
+    }) {
+        const quota = await this.getEffectiveQuota(context.projectId);
+        const maxSingleUpload = boundedPositiveLimit(quota?.maxQuickDeployUploadBytes);
+        if (maxSingleUpload && context.uploadBytes > maxSingleUpload) {
+            throw new ServiceException(`QuickDeploy upload quota exceeded. A single upload can be at most ${maxSingleUpload} byte(s).`);
+        }
+
+        const userId = context.actor.actorUserId;
+        if (!userId) {
+            return;
+        }
+
+        const maxBytesPerHour = boundedPositiveLimit(quota?.maxQuickDeployUploadBytesPerHour);
+        if (maxBytesPerHour) {
+            await this.incrementHourlyQuota({
+                scopeType: "QUICKDEPLOY_UPLOAD_BYTES_USER",
+                scopeId: userId,
+                limit: maxBytesPerHour,
+                incrementBy: context.uploadBytes,
+                tx: context.tx,
+                message: `QuickDeploy upload byte quota exceeded. Limit is ${maxBytesPerHour} byte(s) per hour.`,
+            });
+        }
+
+        const maxBuildsPerHour = boundedPositiveLimit(quota?.maxQuickDeployBuildsPerUserPerHour);
+        if (maxBuildsPerHour) {
+            await this.incrementHourlyQuota({
+                scopeType: "QUICKDEPLOY_BUILDS_USER",
+                scopeId: userId,
+                limit: maxBuildsPerHour,
+                tx: context.tx,
+                message: `QuickDeploy build quota exceeded. Limit is ${maxBuildsPerHour} build(s) per hour.`,
+            });
+        }
+
+        const maxConcurrentBuilds = boundedPositiveLimit(quota?.maxConcurrentQuickDeployBuilds);
+        if (maxConcurrentBuilds) {
+            const concurrentBuilds = await context.tx.quickDeployBuild.count({
                 where: {
-                    scopeType_scopeId_windowStart: {
-                        scopeType: reservation.scopeType,
-                        scopeId: reservation.scopeId,
-                        windowStart,
+                    projectId: context.projectId,
+                    status: {
+                        in: ["UPLOADED", "QUEUED", "RUNNING"]
                     }
-                },
-                update: {},
-                create: {
-                    scopeType: reservation.scopeType,
-                    scopeId: reservation.scopeId,
-                    windowStart,
-                    count: 0,
                 }
             });
-            const updated = await context.tx.deployQuotaWindow.updateMany({
-                where: {
-                    scopeType: reservation.scopeType,
-                    scopeId: reservation.scopeId,
-                    windowStart,
-                    count: {
-                        lt: reservation.limit
-                    }
-                },
-                data: {
-                    count: {
-                        increment: 1
-                    }
-                }
-            });
-            if (updated.count !== 1) {
-                throw new ServiceException(`${reservation.scopeType.toLowerCase()} deploy quota exceeded. Limit is ${reservation.limit} deploy(s) per hour.`);
+            if (concurrentBuilds >= maxConcurrentBuilds) {
+                throw new ServiceException(`QuickDeploy concurrent build quota exceeded. Limit is ${maxConcurrentBuilds} pending or running build(s).`);
             }
         }
     }

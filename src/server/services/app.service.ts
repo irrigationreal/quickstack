@@ -68,7 +68,9 @@ class AppService {
                         actorUserId: actor.actorUserId ?? undefined,
                         actorEmail: actor.actorEmail,
                         actorType: actor.actorType,
-                        trigger: actor.actorType === "WEBHOOK" ? "WEBHOOK" : actor.actorType === "USER" ? "USER" : "SYSTEM",
+                        trigger: actor.actorType === "WEBHOOK" ? "WEBHOOK" : actor.actorType === "USER" ? "USER" : actor.actorType === "API_KEY" ? "API_KEY" : "SYSTEM",
+                        apiKeyId: actor.apiKeyId ?? undefined,
+                        apiKeyName: actor.apiKeyName ?? undefined,
                         forceBuild,
                         sourceType: app.sourceType,
                         buildMethod: app.buildMethod,
@@ -130,7 +132,7 @@ class AppService {
                 outcome: "SUCCESS",
                 message: "Deployment started successfully.",
             });
-            return result;
+            return { deploymentId, result };
         } catch (error) {
             await dataAccess.client.deploymentRecord.update({
                 where: {
@@ -201,7 +203,8 @@ class AppService {
             appPorts: true,
             appNodePorts: true,
             appFileMounts: true,
-            appBasicAuths: true
+            appBasicAuths: true,
+            appSecretEnvVars: true
         };
 
         const client = tx || dataAccess.client;
@@ -408,6 +411,14 @@ class AppService {
         return await dataAccess.client.appDomain.findFirstOrThrow({
             where: {
                 id
+            }
+        });
+    }
+
+    async getDomainByHostname(hostname: string) {
+        return await dataAccess.client.appDomain.findFirstOrThrow({
+            where: {
+                hostname
             }
         });
     }

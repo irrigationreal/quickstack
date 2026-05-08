@@ -163,6 +163,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

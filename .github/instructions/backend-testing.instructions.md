@@ -116,10 +116,10 @@ describe('app.service integration', () => {
 ## Running Tests
 
 ```bash
-yarn test
-yarn test:watch
-yarn test src/server/services/build.service.unit.spec.ts
-yarn test src/__tests__/integration/server/services/build.service.integration.spec.ts
+pnpm test
+pnpm test:watch
+pnpm test src/server/services/build.service.unit.spec.ts
+pnpm test src/__tests__/integration/server/services/build.service.integration.spec.ts
 ```
 
 Use `--pool=forks` or `--no-file-parallelism` for integration suites that mutate `process.env.DATABASE_URL` or Prisma singleton state.

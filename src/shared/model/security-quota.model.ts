@@ -11,6 +11,10 @@ export const securityQuotaZodModel = z.object({
     maxTotalCpuLimitMillicoresPerProject: stringToOptionalNumber,
     maxDeploysPerUserPerHour: stringToOptionalNumber,
     maxDeploysPerAppPerHour: stringToOptionalNumber,
+    maxQuickDeployUploadBytes: stringToOptionalNumber,
+    maxQuickDeployUploadBytesPerHour: stringToOptionalNumber,
+    maxQuickDeployBuildsPerUserPerHour: stringToOptionalNumber,
+    maxConcurrentQuickDeployBuilds: stringToOptionalNumber,
 });
 
 export type SecurityQuotaModel = z.infer<typeof securityQuotaZodModel>;

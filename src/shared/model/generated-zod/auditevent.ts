@@ -18,6 +18,8 @@ export const AuditEventModel = z.object({
   appId: z.string().nullish(),
   appName: z.string().nullish(),
   deploymentId: z.string().nullish(),
+  apiKeyId: z.string().nullish(),
+  apiKeyName: z.string().nullish(),
   ipAddress: z.string().nullish(),
   userAgent: z.string().nullish(),
   message: z.string().nullish(),

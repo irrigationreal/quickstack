@@ -260,6 +260,7 @@ function createBuildApp(input: BuildIntegrationInput & { id: string; projectId: 
         appFileMounts: [],
         appVolumes: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
     };
 }
 

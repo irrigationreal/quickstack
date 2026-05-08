@@ -65,6 +65,15 @@ class DeploymentLogService {
         return appId;
     }
 
+    async getLogsText(deploymentId: string) {
+        await FsUtils.createDirIfNotExistsAsync(PathUtils.deploymentLogsPath, true);
+        const logFilePath = PathUtils.appDeploymentLogFile(deploymentId);
+        if (!await FsUtils.fileExists(logFilePath)) {
+            throw new ServiceException(`No deployment log found for deployment ${deploymentId}.`);
+        }
+        return await fsPromises.readFile(logFilePath, 'utf8');
+    }
+
     async getLogsStream(deploymentId: string, streamedData: (data: string) => void) {
         await FsUtils.createDirIfNotExistsAsync(PathUtils.deploymentLogsPath, true);
         const logFilePath = PathUtils.appDeploymentLogFile(deploymentId);

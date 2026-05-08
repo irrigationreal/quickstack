@@ -21,12 +21,12 @@ All testing rules are stored in `backend-testing.instructions.md`, covering Vite
 
 1. Use provided devcontainer (includes Node, Bun, Prisma extension)
 2. Provide k3s credentials in `kube-config.config` at project root
-3. `yarn install`
+3. `pnpm install`
 4. Development modes:
-   - `yarn dev` - Standard Next.js dev server
-   - `yarn dev-live` - Custom server with WebSocket support (rebuilds TypeScript)
-   - `yarn build` - Production build (Next.js + custom server compilation)
-   - `yarn start-prod` - Run production build with custom server
+   - `pnpm dev` - Standard Next.js dev server
+   - `pnpm dev-live` - Custom server with WebSocket support (rebuilds TypeScript)
+   - `pnpm build` - Production build (Next.js + custom server compilation)
+   - `pnpm start-prod` - Run production build with custom server
 
 ## Commit Convention
 

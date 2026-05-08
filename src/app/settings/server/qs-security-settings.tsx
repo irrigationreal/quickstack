@@ -27,6 +27,10 @@ const quotaFields: Array<{ name: keyof SecurityQuotaModel; label: string; descri
     { name: "maxTotalCpuLimitMillicoresPerProject", label: "Max project CPU (m)", description: "Blocks project-wide CPU limit totals above this value." },
     { name: "maxDeploysPerUserPerHour", label: "Max deploys per user/hour", description: "Blocks user-triggered deploys over this hourly count." },
     { name: "maxDeploysPerAppPerHour", label: "Max deploys per app/hour", description: "Blocks all deploy triggers over this hourly app count." },
+    { name: "maxQuickDeployUploadBytes", label: "Max QuickDeploy upload (bytes)", description: "Rejects a single managed build upload above this size." },
+    { name: "maxQuickDeployUploadBytesPerHour", label: "Max QuickDeploy bytes/hour", description: "Rejects managed build uploads after this hourly user byte total." },
+    { name: "maxQuickDeployBuildsPerUserPerHour", label: "Max QuickDeploy builds user/hour", description: "Rejects managed builds over this hourly user count." },
+    { name: "maxConcurrentQuickDeployBuilds", label: "Max concurrent QuickDeploy builds", description: "Rejects managed builds when this many are already pending or running." },
 ];
 
 function formatDate(date: Date | string) {

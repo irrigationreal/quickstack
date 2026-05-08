@@ -67,8 +67,7 @@ export async function isAuthorizedForBackups() {
     return session;
 }
 
-export async function isAuthorizedReadForApp(appId: string) {
-    const session = await getAuthUserSession();
+export function assertSessionCanReadApp(session: UserSession, appId: string) {
     if (UserGroupUtils.isAdmin(session)) {
         return session;
     }
@@ -84,8 +83,12 @@ export async function isAuthorizedReadForApp(appId: string) {
     return session;
 }
 
-export async function isAuthorizedWriteForApp(appId: string) {
+export async function isAuthorizedReadForApp(appId: string) {
     const session = await getAuthUserSession();
+    return assertSessionCanReadApp(session, appId);
+}
+
+export function assertSessionCanWriteApp(session: UserSession, appId: string) {
     if (UserGroupUtils.isAdmin(session)) {
         return session;
     }
@@ -99,6 +102,11 @@ export async function isAuthorizedWriteForApp(appId: string) {
         throw new ServiceException('User is not authorized for this action.');
     }
     return session;
+}
+
+export async function isAuthorizedWriteForApp(appId: string) {
+    const session = await getAuthUserSession();
+    return assertSessionCanWriteApp(session, appId);
 }
 
 export async function safeGetUserPermissionForApp(appId: string) {

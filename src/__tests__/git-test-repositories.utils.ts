@@ -48,5 +48,6 @@ export function createGitApp(input: Pick<AppExtendedModel, 'id' | 'sourceType' |
         appFileMounts: [],
         appVolumes: [],
         appBasicAuths: [],
+        appSecretEnvVars: [],
     } as AppExtendedModel;
 }

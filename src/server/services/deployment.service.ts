@@ -130,6 +130,10 @@ class DeploymentService {
         const allVolumes = [...volumes, ...fileVolumes];
         const allVolumeMounts = [...volumeMounts, ...fileVolumeMounts];
 
+        const appSecretName = await secretService.createOrUpdateAppSecretEnvVars(app);
+        if (appSecretName) {
+            dlog(deploymentId, `Configured Secret Env Variables.`);
+        }
         const envVars = EnvVarUtils.parseEnvVariables(app);
         dlog(deploymentId, `Configured ${envVars.length} Env Variables.`);
 

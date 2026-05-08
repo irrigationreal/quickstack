@@ -84,6 +84,7 @@ model User {
   sessions          Session[]
   auditEvents       AuditEvent[]
   deploymentRecords DeploymentRecord[]
+  apiKeys           ApiKey[]
   // Optional for WebAuthn support
   Authenticator Authenticator[]
 
@@ -97,6 +98,26 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  prefix         String    @unique
+  keyHash        String    @unique
+  scopes         String
+  appIdsJson     String?
+  projectIdsJson String?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  expiresAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // Optional for WebAuthn support
@@ -168,6 +189,7 @@ model Project {
   id                     String                  @id @default(uuid())
   name                   String
   apps                   App[]
+  quickDeployBuilds      QuickDeployBuild[]
   roleProjectPermissions RoleProjectPermission[]
 
   createdAt DateTime @default(now())
@@ -231,7 +253,9 @@ model App {
   appVolumes         AppVolume[]
   appFileMounts      AppFileMount[]
   appBasicAuths      AppBasicAuth[]
+  appSecretEnvVars   AppSecretEnvVar[]
   appGitSshKey       AppGitSshKey?
+  quickDeployBuilds  QuickDeployBuild[]
   roleAppPermissions RoleAppPermission[]
 
   createdAt DateTime @default(now())
@@ -321,6 +345,19 @@ model AppFileMount {
   @@unique([appId, containerMountPath])
 }
 
+model AppSecretEnvVar {
+  id             String @id @default(uuid())
+  appId          String
+  app            App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  name           String
+  encryptedValue String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([appId, name])
+}
+
 model Parameter {
   name  String @id
   value String
@@ -368,6 +405,27 @@ model AppBasicAuth {
   updatedAt DateTime @updatedAt
 }
 
+model QuickDeployBuild {
+  id             String   @id @default(uuid())
+  appId          String
+  app            App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mode           String
+  contentHash    String
+  imageReference String?
+  status         String   @default("UPLOADED")
+  uploadBytes    Int
+  createdByApiKeyId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([appId])
+  @@index([projectId])
+  @@index([contentHash])
+  @@index([createdAt])
+}
+
 model AuditEvent {
   id             String   @id @default(uuid())
   createdAt      DateTime @default(now())
@@ -385,6 +443,8 @@ model AuditEvent {
   appId          String?
   appName        String?
   deploymentId   String?
+  apiKeyId       String?
+  apiKeyName     String?
   ipAddress      String?
   userAgent      String?
   message        String?
@@ -397,6 +457,7 @@ model AuditEvent {
   @@index([projectId])
   @@index([appId])
   @@index([deploymentId])
+  @@index([apiKeyId])
 }
 
 model SecurityQuota {
@@ -411,6 +472,10 @@ model SecurityQuota {
   maxTotalCpuLimitMillicoresPerProject Int?
   maxDeploysPerUserPerHour            Int?
   maxDeploysPerAppPerHour             Int?
+  maxQuickDeployUploadBytes           Int?
+  maxQuickDeployUploadBytesPerHour    Int?
+  maxQuickDeployBuildsPerUserPerHour  Int?
+  maxConcurrentQuickDeployBuilds      Int?
   createdAt                           DateTime @default(now())
   updatedAt                           DateTime @updatedAt
 
@@ -428,6 +493,8 @@ model DeploymentRecord {
   actorEmail    String
   actorType     String
   trigger       String
+  apiKeyId      String?
+  apiKeyName    String?
   forceBuild    Boolean  @default(false)
   sourceType    String?
   buildMethod   String?
@@ -439,6 +506,7 @@ model DeploymentRecord {
   @@index([appId])
   @@index([projectId])
   @@index([actorEmail])
+  @@index([apiKeyId])
   @@index([createdAt])
 }
 

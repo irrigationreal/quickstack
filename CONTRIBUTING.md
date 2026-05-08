@@ -71,7 +71,7 @@ For each merged pull request a docker image for the canary tag will be created.
 
 To run the tests locally, use the following command:
 ```sh
-yarn test
+pnpm test
 ```
 
 ### Environment Setup
@@ -130,12 +130,12 @@ If you run into any issues, feel free to reach out and open an issue.
 
 #### Install Dependencies
 ```sh
-yarn install
+pnpm install
 ```
 
 #### Start Development Server
 ```sh
-yarn dev
+pnpm dev
 ```
 
 ### License

@@ -6,7 +6,7 @@ import { ServiceException } from "@/shared/model/service.exception.model";
 import { AuditEventFilterModel } from "@/shared/model/audit-event-filter.model";
 import { UserSession } from "@/shared/model/sim-session.model";
 
-type ActorType = "USER" | "WEBHOOK" | "SYSTEM";
+type ActorType = "USER" | "WEBHOOK" | "SYSTEM" | "API_KEY";
 type AuditOutcome = "REQUESTED" | "SUCCESS" | "DENIED" | "FAILED";
 
 export type AuditActor = {
@@ -14,6 +14,8 @@ export type AuditActor = {
     actorUserId?: string | null;
     actorEmail: string;
     actorGroupName?: string | null;
+    apiKeyId?: string | null;
+    apiKeyName?: string | null;
 };
 
 export type AuditEventInput = AuditActor & {
@@ -26,6 +28,8 @@ export type AuditEventInput = AuditActor & {
     appId?: string | null;
     appName?: string | null;
     deploymentId?: string | null;
+    apiKeyId?: string | null;
+    apiKeyName?: string | null;
     ipAddress?: string | null;
     userAgent?: string | null;
     message?: string | null;
@@ -98,6 +102,8 @@ class AuditService {
                 appId: event.appId ?? undefined,
                 appName: event.appName ?? undefined,
                 deploymentId: event.deploymentId ?? undefined,
+                apiKeyId: event.apiKeyId ?? undefined,
+                apiKeyName: event.apiKeyName ?? undefined,
                 ipAddress: event.ipAddress ?? undefined,
                 userAgent: event.userAgent ?? undefined,
                 message: event.message ?? undefined,
