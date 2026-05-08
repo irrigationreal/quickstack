@@ -3,6 +3,7 @@ import { Session } from "next-auth";
 import { RolePermissionEnum } from "./role-extended.model.ts";
 
 export interface UserSession {
+    id: string;
     email: string;
     userGroup?: UserGroupExtended;
 }

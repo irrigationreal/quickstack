@@ -18,9 +18,10 @@ import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import QuickStackMaintenanceSettings from "./qs-maintenance-settings";
 import podService from "@/server/services/pod.service";
 import { ServerSettingsTabs } from "./server-settings-tabs";
-import { Settings, Network, HardDrive, Rocket, Wrench, Hammer } from "lucide-react";
+import { Settings, Network, HardDrive, Rocket, Wrench, Hammer, Shield } from "lucide-react";
 import QsBuildSettings from "./qs-build-settings";
-import { getBuildSettings } from "./actions";
+import QsSecuritySettings from "./qs-security-settings";
+import { getAuditEvents, getBuildSettings, getSecurityQuota } from "./actions";
 import quickStackUpdateService from "@/server/services/qs-update.service";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import clusterService from "@/server/services/cluster.service";
@@ -73,6 +74,20 @@ export default async function ProjectPage({
 
     const qsPodInfo = qsPodInfos.find(p => !!p);
     const defaultTab = typeof resolvedSearchParams?.tab === 'string' ? resolvedSearchParams.tab : 'general';
+    const auditFilters = {
+        actorEmail: typeof resolvedSearchParams?.actorEmail === 'string' ? resolvedSearchParams.actorEmail : undefined,
+        action: typeof resolvedSearchParams?.action === 'string' ? resolvedSearchParams.action : undefined,
+        outcome: typeof resolvedSearchParams?.outcome === 'string' ? resolvedSearchParams.outcome : undefined,
+        projectId: typeof resolvedSearchParams?.projectId === 'string' ? resolvedSearchParams.projectId : undefined,
+        appId: typeof resolvedSearchParams?.appId === 'string' ? resolvedSearchParams.appId : undefined,
+        deploymentId: typeof resolvedSearchParams?.deploymentId === 'string' ? resolvedSearchParams.deploymentId : undefined,
+        from: typeof resolvedSearchParams?.from === 'string' ? resolvedSearchParams.from : undefined,
+        to: typeof resolvedSearchParams?.to === 'string' ? resolvedSearchParams.to : undefined,
+    };
+    const [securityQuota, auditEvents] = await Promise.all([
+        getSecurityQuota(),
+        getAuditEvents(auditFilters),
+    ]);
 
     return (
         <div className="flex-1 space-y-6 pt-6  pb-16">
@@ -96,6 +111,7 @@ export default async function ProjectPage({
                         <TabsTrigger value="networking"><Network className="mr-2 h-4 w-4" />Networking / Traefik</TabsTrigger>
                         <TabsTrigger value="storage"><HardDrive className="mr-2 h-4 w-4" />Storage & Backups</TabsTrigger>
                         <TabsTrigger value="builds"><Hammer className="mr-2 h-4 w-4" />Builds</TabsTrigger>
+                        <TabsTrigger value="security"><Shield className="mr-2 h-4 w-4" />Security</TabsTrigger>
                         <TabsTrigger value="cluster"><Network className="mr-2 h-4 w-4" />Cluster</TabsTrigger>
                         <TabsTrigger value="updates"><Rocket className="mr-2 h-4 w-4" />Updates {newVersionInfo && <div className="h-2 w-2 ml-2 rounded-full bg-orange-500 animate-pulse" />}</TabsTrigger>
                         <TabsTrigger value="maintenance"><Wrench className="mr-2 h-4 w-4" />Maintenance</TabsTrigger>
@@ -128,6 +144,10 @@ export default async function ProjectPage({
                     <div className="grid gap-6">
                         <QsBuildSettings buildSettings={buildSettings} nodes={nodeInfo} />
                     </div>
+                </TabsContent>
+
+                <TabsContent value="security" className="space-y-4">
+                    <QsSecuritySettings quota={securityQuota} auditEvents={auditEvents} />
                 </TabsContent>
 
                 <TabsContent value="cluster" className="space-y-4">

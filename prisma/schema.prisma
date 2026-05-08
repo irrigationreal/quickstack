@@ -80,8 +80,10 @@ model User {
   userGroupId String?
   userGroup   UserGroup? @relation(fields: [userGroupId], references: [id])
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts          Account[]
+  sessions          Session[]
+  auditEvents       AuditEvent[]
+  deploymentRecords DeploymentRecord[]
   // Optional for WebAuthn support
   Authenticator Authenticator[]
 
@@ -363,4 +365,90 @@ model AppBasicAuth {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  createdAt      DateTime @default(now())
+  actorUserId    String?
+  actorUser      User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorEmail     String
+  actorGroupName String?
+  actorType      String
+  action         String
+  outcome        String
+  targetType     String
+  targetId       String?
+  projectId      String?
+  projectName    String?
+  appId          String?
+  appName        String?
+  deploymentId   String?
+  ipAddress      String?
+  userAgent      String?
+  message        String?
+  metadataJson   String?
+
+  @@index([createdAt])
+  @@index([actorEmail])
+  @@index([action])
+  @@index([outcome])
+  @@index([projectId])
+  @@index([appId])
+  @@index([deploymentId])
+}
+
+model SecurityQuota {
+  id                                  String   @id @default(uuid())
+  scope                               String   @default("GLOBAL")
+  projectId                           String?
+  maxAppsPerProject                   Int?
+  maxReplicasPerApp                   Int?
+  maxMemoryLimitMbPerReplica          Int?
+  maxCpuLimitMillicoresPerReplica     Int?
+  maxTotalMemoryLimitMbPerProject     Int?
+  maxTotalCpuLimitMillicoresPerProject Int?
+  maxDeploysPerUserPerHour            Int?
+  maxDeploysPerAppPerHour             Int?
+  createdAt                           DateTime @default(now())
+  updatedAt                           DateTime @updatedAt
+
+  @@unique([scope, projectId])
+}
+
+model DeploymentRecord {
+  deploymentId  String   @id
+  appId         String
+  appName       String?
+  projectId     String
+  projectName   String?
+  actorUserId   String?
+  actorUser     User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorEmail    String
+  actorType     String
+  trigger       String
+  forceBuild    Boolean  @default(false)
+  sourceType    String?
+  buildMethod   String?
+  status        String
+  gitCommitHash String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([appId])
+  @@index([projectId])
+  @@index([actorEmail])
+  @@index([createdAt])
+}
+
+model DeployQuotaWindow {
+  id          String   @id @default(uuid())
+  scopeType   String
+  scopeId     String
+  windowStart DateTime
+  count       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scopeType, scopeId, windowStart])
 }

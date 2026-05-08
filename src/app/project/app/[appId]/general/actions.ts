@@ -11,10 +11,11 @@ import { appContainerConfigZodModel } from "@/shared/model/app-container-config.
 import { AppContainerConfigInputModel } from "./app-container-config";
 import appGitSshKeyService from "@/server/services/app-git-ssh-key.service";
 import gitService from "@/server/services/git.service";
+import auditService, { auditActorFromSession } from "@/server/services/audit.service";
 
 export const saveGeneralAppSourceInfo = async (prevState: any, inputData: AppSourceInfoInputModel, appId: string) => {
     return simpleAction(async () => {
-        await isAuthorizedWriteForApp(appId);
+        const session = await isAuthorizedWriteForApp(appId);
         const existingApp = await appService.getById(appId);
         if (existingApp.appType !== 'APP' && inputData.sourceType !== 'CONTAINER') {
             throw new ServiceException('Only application workloads can use Git sources.');
@@ -44,6 +45,17 @@ export const saveGeneralAppSourceInfo = async (prevState: any, inputData: AppSou
                 containerRegistryPassword: null,
                 sourceType: 'GIT',
                 id: appId,
+            });
+            await auditService.recordBestEffort({
+                ...auditActorFromSession(session),
+                action: "APP_SOURCE_UPDATE",
+                outcome: "SUCCESS",
+                targetType: "APP",
+                targetId: appId,
+                projectId: existingApp.projectId,
+                appId,
+                appName: existingApp.name,
+                metadata: { sourceType: "GIT", changedFields: Object.keys(validatedData) },
             });
             return;
         }
@@ -77,6 +89,17 @@ export const saveGeneralAppSourceInfo = async (prevState: any, inputData: AppSou
                 sourceType: 'GIT_SSH',
                 id: appId,
             });
+            await auditService.recordBestEffort({
+                ...auditActorFromSession(session),
+                action: "APP_SOURCE_UPDATE",
+                outcome: "SUCCESS",
+                targetType: "APP",
+                targetId: appId,
+                projectId: existingApp.projectId,
+                appId,
+                appName: existingApp.name,
+                metadata: { sourceType: "GIT_SSH", changedFields: Object.keys(validatedData) },
+            });
             return;
         }
 
@@ -97,6 +120,17 @@ export const saveGeneralAppSourceInfo = async (prevState: any, inputData: AppSou
                 gitToken: null,
                 sourceType: 'CONTAINER',
                 id: appId,
+            });
+            await auditService.recordBestEffort({
+                ...auditActorFromSession(session),
+                action: "APP_SOURCE_UPDATE",
+                outcome: "SUCCESS",
+                targetType: "APP",
+                targetId: appId,
+                projectId: existingApp.projectId,
+                appId,
+                appName: existingApp.name,
+                metadata: { sourceType: "CONTAINER", changedFields: Object.keys(validatedData) },
             });
             return;
         }
@@ -150,7 +184,7 @@ export const saveGeneralAppRateLimits = async (prevState: any, inputData: AppRat
         if (validatedData.replicas < 1) {
             throw new ServiceException('Replica Count must be at least 1');
         }
-        await isAuthorizedWriteForApp(appId);
+        const session = await isAuthorizedWriteForApp(appId);
 
         const extendedApp = await appService.getExtendedById(appId);
         if (extendedApp.appVolumes.some(v => v.accessMode === 'ReadWriteOnce') && validatedData.replicas > 1) {
@@ -163,11 +197,22 @@ export const saveGeneralAppRateLimits = async (prevState: any, inputData: AppRat
             ...validatedData,
             id: appId,
         });
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: "APP_RESOURCE_LIMITS_UPDATE",
+            outcome: "SUCCESS",
+            targetType: "APP",
+            targetId: appId,
+            projectId: existingApp.projectId,
+            appId,
+            appName: existingApp.name,
+            metadata: { changedFields: Object.keys(validatedData) },
+        });
     });
 
 export const saveGeneralAppContainerConfig = async (prevState: any, inputData: AppContainerConfigInputModel, appId: string) =>
     saveFormAction(inputData, appContainerConfigZodModel, async (validatedData) => {
-        await isAuthorizedWriteForApp(appId);
+        const session = await isAuthorizedWriteForApp(appId);
         const existingApp = await appService.getById(appId);
 
         // Convert args array to JSON string for storage
@@ -184,5 +229,16 @@ export const saveGeneralAppContainerConfig = async (prevState: any, inputData: A
             securityContextFsGroup: validatedData.securityContextFsGroup ?? null,
             securityContextPrivileged: validatedData.securityContextPrivileged ?? false,
             id: appId,
+        });
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: "APP_CONTAINER_CONFIG_UPDATE",
+            outcome: "SUCCESS",
+            targetType: "APP",
+            targetId: appId,
+            projectId: existingApp.projectId,
+            appId,
+            appName: existingApp.name,
+            metadata: { changedFields: Object.keys(validatedData) },
         });
     });

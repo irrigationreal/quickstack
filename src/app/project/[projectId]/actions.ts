@@ -12,6 +12,7 @@ import fileBrowserService from "@/server/services/file-browser-service";
 import phpMyAdminService from "@/server/services/db-tool-services/phpmyadmin.service";
 import pgAdminService from "@/server/services/db-tool-services/pgadmin.service";
 import { UserGroupUtils } from "@/shared/utils/role.utils";
+import auditService, { auditActorFromSession } from "@/server/services/audit.service";
 
 const createAppSchema = z.object({
     appName: z.string().min(1)
@@ -24,13 +25,46 @@ export const createApp = async (appName: string, projectId: string, appId?: stri
             throw new ServiceException("You are not allowed to create new apps.");
         }
 
-        const returnData = await appService.save({
-            id: appId ?? undefined,
-            name: validatedData.appName,
-            projectId
+        const actor = auditActorFromSession(session);
+        await auditService.recordRequired({
+            ...actor,
+            action: "APP_CREATE_REQUESTED",
+            outcome: "REQUESTED",
+            targetType: "APP",
+            targetId: appId ?? undefined,
+            projectId,
+            metadata: { appName: validatedData.appName },
         });
-
-        return new SuccessActionResult(returnData, "App created successfully.");
+        try {
+            const returnData = await appService.save({
+                id: appId ?? undefined,
+                name: validatedData.appName,
+                projectId
+            });
+            await auditService.recordBestEffort({
+                ...actor,
+                action: "APP_CREATE_REQUESTED",
+                outcome: "SUCCESS",
+                targetType: "APP",
+                targetId: returnData.id,
+                projectId,
+                appId: returnData.id,
+                appName: returnData.name,
+            });
+            return new SuccessActionResult(returnData, "App created successfully.");
+        } catch (error) {
+            await auditService.recordRequired({
+                ...actor,
+                action: "APP_CREATE_REQUESTED",
+                outcome: "DENIED",
+                targetType: "APP",
+                targetId: appId ?? undefined,
+                projectId,
+                message: error instanceof Error ? error.message : "App creation failed.",
+                metadata: { appName: validatedData.appName },
+            });
+            throw error;
+        }
     });
 
 export const createAppFromTemplate = async (prevState: any, inputData: AppTemplateModel, projectId: string) =>
@@ -42,7 +76,40 @@ export const createAppFromTemplate = async (prevState: any, inputData: AppTempla
         if (validatedData.templates.some(x => x.inputSettings.some(y => !y.randomGeneratedIfEmpty && !y.value))) {
             throw new ServiceException('Please fill out all required fields.');
         }
-        await appTemplateService.createAppFromTemplate(projectId, validatedData);
+        const actor = auditActorFromSession(session);
+        await auditService.recordRequired({
+            ...actor,
+            action: "APP_TEMPLATE_CREATE_REQUESTED",
+            outcome: "REQUESTED",
+            targetType: "PROJECT",
+            targetId: projectId,
+            projectId,
+            metadata: { templateCount: validatedData.templates.length },
+        });
+        try {
+            await appTemplateService.createAppFromTemplate(projectId, validatedData);
+            await auditService.recordBestEffort({
+                ...actor,
+                action: "APP_TEMPLATE_CREATE_REQUESTED",
+                outcome: "SUCCESS",
+                targetType: "PROJECT",
+                targetId: projectId,
+                projectId,
+                metadata: { templateCount: validatedData.templates.length },
+            });
+        } catch (error) {
+            await auditService.recordRequired({
+                ...actor,
+                action: "APP_TEMPLATE_CREATE_REQUESTED",
+                outcome: "DENIED",
+                targetType: "PROJECT",
+                targetId: projectId,
+                projectId,
+                message: error instanceof Error ? error.message : "Template app creation failed.",
+                metadata: { templateCount: validatedData.templates.length },
+            });
+            throw error;
+        }
         return new SuccessActionResult(undefined, "");
     });
 
@@ -60,7 +127,46 @@ export const deleteApp = async (appId: string) =>
         for (const volume of app.appVolumes) {
             await fileBrowserService.deleteFileBrowserForVolumeIfExists(volume.id);
         }
-        // delete the app drom database and all kubernetes objects
-        await appService.deleteById(appId);
+        const actor = auditActorFromSession(session);
+        await auditService.recordRequired({
+            ...actor,
+            action: "APP_DELETE_REQUESTED",
+            outcome: "REQUESTED",
+            targetType: "APP",
+            targetId: app.id,
+            projectId: app.projectId,
+            projectName: app.project.name,
+            appId: app.id,
+            appName: app.name,
+        });
+        try {
+            // delete the app drom database and all kubernetes objects
+            await appService.deleteById(appId);
+            await auditService.recordBestEffort({
+                ...actor,
+                action: "APP_DELETE_REQUESTED",
+                outcome: "SUCCESS",
+                targetType: "APP",
+                targetId: app.id,
+                projectId: app.projectId,
+                projectName: app.project.name,
+                appId: app.id,
+                appName: app.name,
+            });
+        } catch (error) {
+            await auditService.recordBestEffort({
+                ...actor,
+                action: "APP_DELETE_REQUESTED",
+                outcome: "FAILED",
+                targetType: "APP",
+                targetId: app.id,
+                projectId: app.projectId,
+                projectName: app.project.name,
+                appId: app.id,
+                appName: app.name,
+                message: error instanceof Error ? error.message : "App deletion failed.",
+            });
+            throw error;
+        }
         return new SuccessActionResult(undefined, "App deleted successfully.");
     });

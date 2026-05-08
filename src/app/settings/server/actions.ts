@@ -33,10 +33,46 @@ import k3sUpdateService from "@/server/services/upgrade-services/k3s-update.serv
 import longhornUpdateService from "@/server/services/upgrade-services/longhorn-update.service";
 import longhornUiService from "@/server/services/longhorn-ui.service";
 import { BuildSettingsModel, buildSettingsZodModel } from "@/shared/model/build-settings.model";
+import { SecurityQuotaModel, securityQuotaZodModel } from "@/shared/model/security-quota.model";
+import { AuditEventFilterModel } from "@/shared/model/audit-event-filter.model";
+import securityQuotaService from "@/server/services/security-quota.service";
+import auditService, { auditActorFromSession } from "@/server/services/audit.service";
+
+export const saveSecurityQuota = async (prevState: any, inputData: SecurityQuotaModel) =>
+  saveFormAction(inputData, securityQuotaZodModel, async (validatedData) => {
+    const session = await getAdminUserSession();
+    await securityQuotaService.saveGlobalQuota(validatedData);
+    await auditService.recordBestEffort({
+      ...auditActorFromSession(session),
+      action: "SECURITY_QUOTA_UPDATE",
+      outcome: "SUCCESS",
+      targetType: "SECURITY_QUOTA",
+      targetId: "global",
+      metadata: { changedFields: Object.keys(validatedData).filter(key => key !== 'id') },
+    });
+  });
+
+export const getSecurityQuota = async (): Promise<SecurityQuotaModel> => {
+  await getAdminUserSession();
+  return securityQuotaService.getGlobalQuotaModel();
+};
+
+export const getAuditEvents = async (filters: AuditEventFilterModel = {}) => {
+  await getAdminUserSession();
+  return auditService.list(filters);
+};
 
 export const saveBuildSettings = async (prevState: any, inputData: BuildSettingsModel) =>
   saveFormAction(inputData, buildSettingsZodModel, async (validatedData) => {
-    await getAdminUserSession();
+    const session = await getAdminUserSession();
+    await auditService.recordRequired({
+      ...auditActorFromSession(session),
+      action: "BUILD_SETTINGS_UPDATE",
+      outcome: "REQUESTED",
+      targetType: "SERVER_SETTINGS",
+      targetId: "build",
+      metadata: { changedFields: Object.keys(validatedData) },
+    });
 
     const saveOrDelete = async (key: string, value: string | number | null | undefined) => {
       if (value !== null && value !== undefined && value !== '') {
@@ -59,6 +95,14 @@ export const saveBuildSettings = async (prevState: any, inputData: BuildSettings
       await paramService.deleteByNameIfExists(ParamService.BUILD_CPU_RESERVATION);
     }
     await saveOrDelete(ParamService.BUILD_NODE, validatedData.buildNode);
+    await auditService.recordBestEffort({
+      ...auditActorFromSession(session),
+      action: "BUILD_SETTINGS_UPDATE",
+      outcome: "SUCCESS",
+      targetType: "SERVER_SETTINGS",
+      targetId: "build",
+      metadata: { changedFields: Object.keys(validatedData) },
+    });
   });
 
 export const getBuildSettings = async (): Promise<BuildSettingsModel> => {

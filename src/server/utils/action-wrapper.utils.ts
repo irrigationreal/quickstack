@@ -8,6 +8,7 @@ import { FormValidationException } from "@/shared/model/form-validation-exceptio
 import { authOptions } from "@/server/utils/auth-options";
 import { NextResponse } from "next/server";
 import userGroupService from "../services/user-group.service";
+import dataAccess from "../adapter/db.client";
 import { RolePermissionEnum } from "@/shared/model/role-extended.model.ts";
 import { UserGroupUtils } from "../../shared/utils/role.utils";
 
@@ -20,12 +21,21 @@ export async function getUserSession(): Promise<UserSession | null> {
     if (!session) {
         return null;
     }
-    let userGroup: UserGroupExtended | null = null;
-    if (!!session?.user?.email) {
-        userGroup = await userGroupService.getRoleByUserMail(session.user.email);
+    if (!session.user?.email) {
+        return null;
     }
+    const user = await dataAccess.client.user.findFirst({
+        where: {
+            email: session.user.email
+        }
+    });
+    if (!user) {
+        return null;
+    }
+    const userGroup = await userGroupService.getRoleByUserMail(session.user.email);
     return {
-        email: session?.user?.email as string,
+        id: user.id,
+        email: user.email,
         userGroup: userGroup ?? undefined,
     };
 }

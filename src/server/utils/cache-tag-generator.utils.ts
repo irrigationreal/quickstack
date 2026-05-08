@@ -43,4 +43,12 @@ export class Tags {
     static quickStackVersionInfo() {
         return `quickstack-version-info`;
     }
+
+    static securityQuotas() {
+        return `security-quotas`;
+    }
+
+    static auditEvents() {
+        return `audit-events`;
+    }
 }

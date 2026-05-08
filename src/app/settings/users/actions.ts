@@ -8,10 +8,12 @@ import { UserEditModel, userEditZodModel } from "@/shared/model/user-edit.model"
 import userGroupService from "@/server/services/user-group.service";
 import { RoleEditModel, roleEditZodModel } from "@/shared/model/role-edit.model";
 import { adminRoleName } from "@/shared/model/role-extended.model.ts";
+import auditService, { auditActorFromSession } from "@/server/services/audit.service";
 
 export const saveUser = async (prevState: any, inputData: UserEditModel) =>
     saveFormAction(inputData, userEditZodModel, async (validatedData) => {
-        const { email } = await getAdminUserSession();
+        const session = await getAdminUserSession();
+        const { email } = session;
         if (validatedData.email === email) {
             throw new ServiceException('Please edit your profile in the profile settings');
         }
@@ -29,13 +31,32 @@ export const saveUser = async (prevState: any, inputData: UserEditModel) =>
             }
             await userService.registerUser(validatedData.email, validatedData.newPassword, validatedData.userGroupId);
         }
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: validatedData.id ? "USER_UPDATE" : "USER_CREATE",
+            outcome: "SUCCESS",
+            targetType: "USER",
+            targetId: validatedData.id,
+            metadata: {
+                targetEmail: validatedData.email,
+                changedFields: ["email", "userGroupId", ...(validatedData.newPassword ? ["password"] : [])],
+            },
+        });
         return new SuccessActionResult();
     });
 
 export const saveRole = async (prevState: any, inputData: RoleEditModel) =>
     saveFormAction(inputData, roleEditZodModel, async (validatedData) => {
-        await getAdminUserSession();
+        const session = await getAdminUserSession();
         await userGroupService.saveWithPermissions(validatedData);
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: validatedData.id ? "ROLE_UPDATE" : "ROLE_CREATE",
+            outcome: "SUCCESS",
+            targetType: "ROLE",
+            targetId: validatedData.id,
+            metadata: { roleName: validatedData.name, changedFields: Object.keys(validatedData) },
+        });
         return new SuccessActionResult();
     });
 
@@ -50,12 +71,20 @@ export const deleteUser = async (userId: string) =>
             throw new ServiceException('You cannot delete users with the group "admin"');
         }
         await userService.deleteUserById(userId);
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: "USER_DELETE",
+            outcome: "SUCCESS",
+            targetType: "USER",
+            targetId: userId,
+            metadata: { targetEmail: user.email },
+        });
         return new SuccessActionResult();
     });
 
 export const assignRoleToUsers = async (userIds: string[], userGroupId: string) =>
     simpleAction(async () => {
-        await getAdminUserSession();
+        const session = await getAdminUserSession();
         const users = await userService.getAllUsers();
         for (const user of users) {
             if (userIds.includes(user.id)) {
@@ -74,13 +103,28 @@ export const assignRoleToUsers = async (userIds: string[], userGroupId: string) 
         for (const user of relevantUsers) {
             await userGroupService.assignUserToRole(user.id, userGroupId);
         }
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: "USER_ROLE_ASSIGNMENT",
+            outcome: "SUCCESS",
+            targetType: "ROLE",
+            targetId: userGroupId,
+            metadata: { userCount: relevantUsers.length },
+        });
 
         return new SuccessActionResult();
     });
 
 export const deleteRole = async (roleId: string) =>
     simpleAction(async () => {
-        await getAdminUserSession();
+        const session = await getAdminUserSession();
         await userGroupService.deleteById(roleId);
+        await auditService.recordBestEffort({
+            ...auditActorFromSession(session),
+            action: "ROLE_DELETE",
+            outcome: "SUCCESS",
+            targetType: "ROLE",
+            targetId: roleId,
+        });
         return new SuccessActionResult();
     });

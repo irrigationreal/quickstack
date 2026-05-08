@@ -3,7 +3,7 @@ import appService from "@/server/services/app.service";
 import deploymentService from "@/server/services/deployment.service";
 import buildWatchService from "@/server/services/standalone-services/build-watch.service";
 import deploymentEventWatchService from "@/server/services/standalone-services/deployment-event-watch.service";
-import { getAuthUserSession, simpleRoute } from "@/server/utils/action-wrapper.utils";
+import { simpleRoute } from "@/server/utils/action-wrapper.utils";
 import { Informer, V1Pod } from "@kubernetes/client-node";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -27,7 +27,10 @@ const routeLogic = (request: Request) => simpleRoute(async () => {
     buildWatchService.startWatch();
     deploymentEventWatchService.startWatch();
 
-    await appService.buildAndDeploy(app.id, true);
+    await appService.buildAndDeploy(app.id, true, {
+        actorType: "WEBHOOK",
+        actorEmail: `webhook:${app.id}`,
+    });
 
     return NextResponse.json({
         status: "success",

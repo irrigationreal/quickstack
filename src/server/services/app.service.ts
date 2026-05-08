@@ -13,43 +13,140 @@ import svcService from "./svc.service";
 import deploymentLogService, { dlog } from "./deployment-logs.service";
 import crypto from "crypto";
 import networkPolicyService from "./network-policy.service";
+import auditService, { AuditActor } from "./audit.service";
+import securityQuotaService from "./security-quota.service";
 import { AppBasicAuthModel, AppDomainModel, AppFileMountModel, AppModel, AppNodePortModel, AppPortModel, AppVolumeModel } from "@/shared/model/generated-zod";
 import { z } from "zod";
 
 class AppService {
 
-    async buildAndDeploy(appId: string, forceBuild: boolean = false) {
+    async buildAndDeploy(appId: string, forceBuild: boolean = false, actor: AuditActor = {
+        actorType: "SYSTEM",
+        actorEmail: "system:unknown-deploy-trigger",
+    }) {
         const deploymentId = crypto.randomUUID();
-        return await deploymentLogService.catchErrosAndLog(deploymentId, async () => {
-            const app = await this.getExtendedById(appId);
+        const app = await this.getExtendedById(appId);
+        const baseAuditEvent = {
+            ...actor,
+            action: "APP_DEPLOY_REQUESTED",
+            targetType: "APP",
+            targetId: app.id,
+            projectId: app.projectId,
+            projectName: app.project.name,
+            appId: app.id,
+            appName: app.name,
+            deploymentId,
+            metadata: {
+                forceBuild,
+                sourceType: app.sourceType,
+                buildMethod: app.buildMethod,
+            }
+        };
 
-            await dlog(deploymentId, `
+        await auditService.recordRequired({
+            ...baseAuditEvent,
+            outcome: "REQUESTED",
+            message: "Deployment requested.",
+        });
+
+        try {
+            const quota = await securityQuotaService.getEffectiveQuota(app.projectId);
+            await dataAccess.client.$transaction(async (tx) => {
+                await securityQuotaService.reserveDeployQuota({
+                    actor,
+                    appId: app.id,
+                    quota,
+                    tx,
+                });
+                await tx.deploymentRecord.create({
+                    data: {
+                        deploymentId,
+                        appId: app.id,
+                        appName: app.name,
+                        projectId: app.projectId,
+                        projectName: app.project.name,
+                        actorUserId: actor.actorUserId ?? undefined,
+                        actorEmail: actor.actorEmail,
+                        actorType: actor.actorType,
+                        trigger: actor.actorType === "WEBHOOK" ? "WEBHOOK" : actor.actorType === "USER" ? "USER" : "SYSTEM",
+                        forceBuild,
+                        sourceType: app.sourceType,
+                        buildMethod: app.buildMethod,
+                        status: "RUNNING",
+                    }
+                });
+            });
+        } catch (error) {
+            await auditService.recordRequired({
+                ...baseAuditEvent,
+                outcome: "DENIED",
+                message: error instanceof Error ? error.message : "Deployment denied.",
+            });
+            throw error;
+        }
+
+        try {
+            const result = await deploymentLogService.catchErrosAndLog(deploymentId, async () => {
+                await dlog(deploymentId, `
 -----------------------------------------------
  Deployment:   ${deploymentId}
  App:          ${app.id}
  Project:      ${app.projectId}
 -----------------------------------------------`, false);
 
-            if (app.sourceType === 'GIT' || app.sourceType === 'GIT_SSH') {
-                // first make build
-                const [buildJobName, gitCommitHash, gitCommitMessage, shouldDeployImmediately] = await buildService.buildApp(deploymentId, app, forceBuild);
-                if (shouldDeployImmediately) {
-                    dlog(deploymentId, `Starting deployment with output from build "${buildJobName}"`);
-                    await deploymentService.createDeployment(
-                        deploymentId,
-                        app,
-                        buildJobName,
-                        gitCommitHash,
-                        gitCommitMessage,
-                        app.buildMethod === 'DOCKERFILE' ? 'DOCKERFILE' : 'RAILPACK',
-                    );
+                let gitCommitHash: string | undefined;
+                if (app.sourceType === 'GIT' || app.sourceType === 'GIT_SSH') {
+                    // first make build
+                    const [buildJobName, buildGitCommitHash, gitCommitMessage, shouldDeployImmediately] = await buildService.buildApp(deploymentId, app, forceBuild);
+                    gitCommitHash = buildGitCommitHash;
+                    if (shouldDeployImmediately) {
+                        dlog(deploymentId, `Starting deployment with output from build "${buildJobName}"`);
+                        await deploymentService.createDeployment(
+                            deploymentId,
+                            app,
+                            buildJobName,
+                            buildGitCommitHash,
+                            gitCommitMessage,
+                            app.buildMethod === 'DOCKERFILE' ? 'DOCKERFILE' : 'RAILPACK',
+                        );
+                    }
+                    // Otherwise the build-watch service will trigger the deployment once the build job completes
+                } else {
+                    // only deploy
+                    await deploymentService.createDeployment(deploymentId, app);
                 }
-                // Otherwise the build-watch service will trigger the deployment once the build job completes
-            } else {
-                // only deploy
-                await deploymentService.createDeployment(deploymentId, app);
-            }
-        });
+                await dataAccess.client.deploymentRecord.update({
+                    where: {
+                        deploymentId
+                    },
+                    data: {
+                        status: "SUCCEEDED",
+                        gitCommitHash,
+                    }
+                });
+            });
+            await auditService.recordBestEffort({
+                ...baseAuditEvent,
+                outcome: "SUCCESS",
+                message: "Deployment started successfully.",
+            });
+            return result;
+        } catch (error) {
+            await dataAccess.client.deploymentRecord.update({
+                where: {
+                    deploymentId
+                },
+                data: {
+                    status: "FAILED"
+                }
+            }).catch(updateError => console.error("Failed to mark deployment record as failed", updateError));
+            await auditService.recordBestEffort({
+                ...baseAuditEvent,
+                outcome: "FAILED",
+                message: error instanceof Error ? error.message : "Deployment failed.",
+            });
+            throw error;
+        }
     }
 
     async deleteById(id: string) {
@@ -149,6 +246,18 @@ class AppService {
     async save(item: Prisma.AppUncheckedCreateInput | Prisma.AppUncheckedUpdateInput, createDefaultPort = true, tx?: Prisma.TransactionClient) {
         let savedItem: App;
         const client = tx || dataAccess.client;
+        const appId = item.id as string | undefined;
+        const existingApp = appId ? await client.app.findFirst({ where: { id: appId } }) : null;
+        const projectId = (item.projectId as string | undefined) ?? existingApp?.projectId;
+        if (!existingApp && projectId) {
+            await securityQuotaService.assertProjectCanCreateApp(projectId, tx);
+        }
+        await securityQuotaService.assertAppResourceLimits(appId, {
+            projectId,
+            replicas: item.replicas as number | undefined,
+            memoryLimit: item.memoryLimit as number | undefined,
+            cpuLimit: item.cpuLimit as number | undefined,
+        }, tx);
         try {
             if (item.id) {
                 savedItem = await client.app.update({
@@ -173,7 +282,7 @@ class AppService {
                 }
             }
         } finally {
-            revalidateTag(Tags.apps(item.projectId as string));
+            revalidateTag(Tags.apps(projectId as string));
             revalidateTag(Tags.app(item.id as string));
             revalidateTag(Tags.projects());
             revalidateTag(Tags.userGroups());
