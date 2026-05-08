@@ -37,6 +37,9 @@ import { SecurityQuotaModel, securityQuotaZodModel } from "@/shared/model/securi
 import { AuditEventFilterModel } from "@/shared/model/audit-event-filter.model";
 import securityQuotaService from "@/server/services/security-quota.service";
 import auditService, { auditActorFromSession } from "@/server/services/audit.service";
+import runtimeClassService from "@/server/services/runtime-class.service";
+import { normalizeRuntimeClassName } from "@/shared/model/app-container-config.model";
+import { RuntimeClassSettingsModel, RuntimeClassSettingsViewModel, runtimeClassSettingsZodModel } from "@/shared/model/runtime-class-settings.model";
 
 export const saveSecurityQuota = async (prevState: any, inputData: SecurityQuotaModel) =>
   saveFormAction(inputData, securityQuotaZodModel, async (validatedData) => {
@@ -60,6 +63,43 @@ export const getSecurityQuota = async (): Promise<SecurityQuotaModel> => {
 export const getAuditEvents = async (filters: AuditEventFilterModel = {}) => {
   await getAdminUserSession();
   return auditService.list(filters);
+};
+
+export const saveRuntimeClassSettings = async (prevState: any, inputData: RuntimeClassSettingsModel) =>
+  saveFormAction(inputData, runtimeClassSettingsZodModel, async (validatedData) => {
+    const session = await getAdminUserSession();
+    const defaultAppRuntimeClass = normalizeRuntimeClassName(validatedData.defaultAppRuntimeClass);
+
+    if (defaultAppRuntimeClass) {
+      await runtimeClassService.assertRuntimeClassExists(defaultAppRuntimeClass);
+      await paramService.save({ name: ParamService.DEFAULT_APP_RUNTIME_CLASS, value: defaultAppRuntimeClass });
+    } else {
+      await paramService.deleteByNameIfExists(ParamService.DEFAULT_APP_RUNTIME_CLASS);
+    }
+
+    await auditService.recordBestEffort({
+      ...auditActorFromSession(session),
+      action: "SECURITY_RUNTIME_CLASS_UPDATE",
+      outcome: "SUCCESS",
+      targetType: "SERVER_SETTINGS",
+      targetId: "runtime-class",
+      metadata: {
+        changedFields: ['defaultAppRuntimeClass'],
+        defaultAppRuntimeClass,
+      },
+    });
+  });
+
+export const getRuntimeClassSettings = async (): Promise<RuntimeClassSettingsViewModel> => {
+  await getAdminUserSession();
+  const [defaultAppRuntimeClass, runtimeClasses] = await Promise.all([
+    paramService.getString(ParamService.DEFAULT_APP_RUNTIME_CLASS),
+    runtimeClassService.getRuntimeClasses(),
+  ]);
+  return {
+    defaultAppRuntimeClass: defaultAppRuntimeClass ?? null,
+    runtimeClasses,
+  };
 };
 
 export const saveBuildSettings = async (prevState: any, inputData: BuildSettingsModel) =>

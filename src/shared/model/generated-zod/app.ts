@@ -14,6 +14,7 @@ export const AppModel = z.object({
   containerRegistryPassword: z.string().nullish(),
   containerCommand: z.string().nullish(),
   containerArgs: z.string().nullish(),
+  runtimeClassName: z.string().nullish(),
   securityContextRunAsUser: z.number().int().nullish(),
   securityContextRunAsGroup: z.number().int().nullish(),
   securityContextFsGroup: z.number().int().nullish(),

@@ -12,6 +12,7 @@ import { AppContainerConfigInputModel } from "./app-container-config";
 import appGitSshKeyService from "@/server/services/app-git-ssh-key.service";
 import gitService from "@/server/services/git.service";
 import auditService, { auditActorFromSession } from "@/server/services/audit.service";
+import { normalizeRuntimeClassName } from "@/shared/model/app-container-config.model";
 
 export const saveGeneralAppSourceInfo = async (prevState: any, inputData: AppSourceInfoInputModel, appId: string) => {
     return simpleAction(async () => {
@@ -214,6 +215,10 @@ export const saveGeneralAppContainerConfig = async (prevState: any, inputData: A
     saveFormAction(inputData, appContainerConfigZodModel, async (validatedData) => {
         const session = await isAuthorizedWriteForApp(appId);
         const existingApp = await appService.getById(appId);
+        const runtimeClassName = normalizeRuntimeClassName(validatedData.runtimeClassName);
+        if (runtimeClassName && existingApp.appType !== 'APP') {
+            throw new ServiceException('RuntimeClass isolation can only be configured for application workloads.');
+        }
 
         // Convert args array to JSON string for storage
         const containerArgsJson = validatedData.containerArgs && validatedData.containerArgs.length > 0
@@ -224,6 +229,7 @@ export const saveGeneralAppContainerConfig = async (prevState: any, inputData: A
             ...existingApp,
             containerCommand: validatedData.containerCommand?.trim() || null,
             containerArgs: containerArgsJson,
+            runtimeClassName,
             securityContextRunAsUser: validatedData.securityContextRunAsUser ?? null,
             securityContextRunAsGroup: validatedData.securityContextRunAsGroup ?? null,
             securityContextFsGroup: validatedData.securityContextFsGroup ?? null,
@@ -239,6 +245,9 @@ export const saveGeneralAppContainerConfig = async (prevState: any, inputData: A
             projectId: existingApp.projectId,
             appId,
             appName: existingApp.name,
-            metadata: { changedFields: Object.keys(validatedData) },
+            metadata: {
+                changedFields: Object.keys(validatedData),
+                runtimeClassName,
+            },
         });
     });

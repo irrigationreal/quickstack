@@ -64,6 +64,7 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
         defaultValues: {
             containerCommand: app.containerCommand || '',
             containerArgs: initialArgs,
+            runtimeClassName: app.runtimeClassName ?? '',
             securityContextRunAsUser: app.securityContextRunAsUser ?? undefined,
             securityContextRunAsGroup: app.securityContextRunAsGroup ?? undefined,
             securityContextFsGroup: app.securityContextFsGroup ?? undefined,
@@ -192,6 +193,36 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
                                     )}
                                 </div>
                             </div>
+
+                            <Separator />
+
+                            {app.appType === 'APP' && <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium">Runtime Isolation</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Leave empty to use the server default RuntimeClass, or select an existing Kubernetes RuntimeClass for this app.
+                                    </p>
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name="runtimeClassName"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <LabelWithHint hint="Optional app override. Leave empty to use the server default. The RuntimeClass must already exist in the cluster, for example kata or kata-qemu. If the class is missing or the node runtime handler is not configured, Kubernetes will fail the pod instead of falling back to the default runtime.">
+                                                RuntimeClass override
+                                            </LabelWithHint>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="e.g., kata"
+                                                    {...field}
+                                                    value={field.value ?? ''}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>}
 
                             <Separator />
 

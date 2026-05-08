@@ -58,7 +58,7 @@ export default function QsSecuritySettings({
     }, [state]);
 
     return (
-        <div className="grid gap-6">
+        <>
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Security quotas</CardTitle>
@@ -148,6 +148,6 @@ export default function QsSecuritySettings({
                     </Table>
                 </CardContent>
             </Card>
-        </div>
+        </>
     );
 }

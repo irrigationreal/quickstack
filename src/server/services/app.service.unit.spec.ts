@@ -134,6 +134,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         containerRegistryPassword: null,
         containerCommand: null,
         containerArgs: null,
+        runtimeClassName: null,
         securityContextRunAsUser: null,
         securityContextRunAsGroup: null,
         securityContextFsGroup: null,

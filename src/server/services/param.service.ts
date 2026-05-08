@@ -19,6 +19,7 @@ export class ParamService {
     static readonly BUILD_CPU_LIMIT = 'buildCpuLimit';
     static readonly BUILD_CPU_RESERVATION = 'buildCpuReservation';
     static readonly BUILD_NODE = 'buildNode';
+    static readonly DEFAULT_APP_RUNTIME_CLASS = 'defaultAppRuntimeClass';
     static readonly QS_INSTANCE_ID = 'qsInstanceId';
 
     async getUncached(name: string) {

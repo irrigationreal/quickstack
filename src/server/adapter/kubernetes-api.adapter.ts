@@ -209,6 +209,7 @@ class K3sApiAdapter {
     batch: any;
     log: k8s.Log;
     network: any;
+    node: any;
     customObjects: any;
     metrics: k8s.Metrics;
 
@@ -218,6 +219,7 @@ class K3sApiAdapter {
         this.batch = this.getK8sBatchApiClient();
         this.log = this.getK8sLogApiClient();
         this.network = this.getK8sNetworkApiClient();
+        this.node = this.getK8sNodeApiClient();
         this.customObjects = this.getK8sCustomObjectsApiClient();
         this.metrics = this.getMetricsApiClient();
     }
@@ -266,6 +268,12 @@ class K3sApiAdapter {
         const kc = this.getKubeConfig()
         const networkClient = kc.makeApiClient(k8s.NetworkingV1Api);
         return withLegacyKubernetesResponses(networkClient);
+    }
+
+    getK8sNodeApiClient = () => {
+        const kc = this.getKubeConfig()
+        const nodeClient = kc.makeApiClient(k8s.NodeV1Api);
+        return withLegacyKubernetesResponses(nodeClient);
     }
 
     getMetricsApiClient = () => {

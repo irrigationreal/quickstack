@@ -21,7 +21,8 @@ import { ServerSettingsTabs } from "./server-settings-tabs";
 import { Settings, Network, HardDrive, Rocket, Wrench, Hammer, Shield } from "lucide-react";
 import QsBuildSettings from "./qs-build-settings";
 import QsSecuritySettings from "./qs-security-settings";
-import { getAuditEvents, getBuildSettings, getSecurityQuota } from "./actions";
+import QsRuntimeClassSettings from "./qs-runtime-class-settings";
+import { getAuditEvents, getBuildSettings, getRuntimeClassSettings, getSecurityQuota } from "./actions";
 import quickStackUpdateService from "@/server/services/qs-update.service";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import clusterService from "@/server/services/cluster.service";
@@ -84,8 +85,9 @@ export default async function ProjectPage({
         from: typeof resolvedSearchParams?.from === 'string' ? resolvedSearchParams.from : undefined,
         to: typeof resolvedSearchParams?.to === 'string' ? resolvedSearchParams.to : undefined,
     };
-    const [securityQuota, auditEvents] = await Promise.all([
+    const [securityQuota, runtimeClassSettings, auditEvents] = await Promise.all([
         getSecurityQuota(),
+        getRuntimeClassSettings(),
         getAuditEvents(auditFilters),
     ]);
 
@@ -147,7 +149,10 @@ export default async function ProjectPage({
                 </TabsContent>
 
                 <TabsContent value="security" className="space-y-4">
-                    <QsSecuritySettings quota={securityQuota} auditEvents={auditEvents} />
+                    <div className="grid gap-6">
+                        <QsRuntimeClassSettings settings={runtimeClassSettings} />
+                        <QsSecuritySettings quota={securityQuota} auditEvents={auditEvents} />
+                    </div>
                 </TabsContent>
 
                 <TabsContent value="cluster" className="space-y-4">

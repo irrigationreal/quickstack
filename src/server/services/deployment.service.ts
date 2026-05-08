@@ -19,10 +19,32 @@ import secretService from "./secret.service";
 import fileBrowserService from "./file-browser-service";
 import podService from "./pod.service";
 import networkPolicyService from "./network-policy.service";
+import runtimeClassService from "./runtime-class.service";
+import paramService, { ParamService } from "./param.service";
+import { normalizeRuntimeClassName } from "@/shared/model/app-container-config.model";
 import { z } from "zod";
 import { AppBuildMethod } from "@/shared/model/app-source-info.model";
 
+type ResolvedRuntimeClass = {
+    name: string | null;
+    source: 'APP_OVERRIDE' | 'SERVER_DEFAULT' | 'NONE';
+};
+
 class DeploymentService {
+
+    async resolveRuntimeClassForApp(app: AppExtendedModel): Promise<ResolvedRuntimeClass> {
+        const appRuntimeClassName = normalizeRuntimeClassName(app.runtimeClassName);
+        if (appRuntimeClassName) {
+            return { name: appRuntimeClassName, source: 'APP_OVERRIDE' };
+        }
+
+        const defaultRuntimeClassName = normalizeRuntimeClassName(await paramService.getString(ParamService.DEFAULT_APP_RUNTIME_CLASS));
+        if (defaultRuntimeClassName) {
+            return { name: defaultRuntimeClassName, source: 'SERVER_DEFAULT' };
+        }
+
+        return { name: null, source: 'NONE' };
+    }
 
     async getDeployment(namespace: string, appName: string): Promise<V1Deployment | undefined> {
         const allDeployments = await k3s.apps.listNamespacedDeployment(namespace) as { body: V1DeploymentList };
@@ -114,6 +136,12 @@ class DeploymentService {
         await networkPolicyService.reconcileNetworkPolicy(app);
         dlog(deploymentId, `Configured Network Policy.`);
 
+        const runtimeClass = await this.resolveRuntimeClassForApp(app);
+        if (runtimeClass.name) {
+            await runtimeClassService.assertRuntimeClassExists(runtimeClass.name);
+            dlog(deploymentId, `Configured RuntimeClass: ${runtimeClass.name} (${runtimeClass.source === 'APP_OVERRIDE' ? 'app override' : 'server default'}). This only verifies that the RuntimeClass object exists; node handler availability is controlled by cluster configuration.`);
+        }
+
         const existingDeployment = await this.getDeployment(app.projectId, app.id);
         const body: V1Deployment = {
             metadata: {
@@ -152,6 +180,7 @@ class DeploymentService {
                                 ...(allVolumeMounts.length > 0 ? { volumeMounts: allVolumeMounts } : {}),
                             }
                         ],
+                        ...(runtimeClass.name ? { runtimeClassName: runtimeClass.name } : {}),
                         ...(allVolumes.length > 0 ? { volumes: allVolumes } : {}),
                     }
                 }
