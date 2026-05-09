@@ -14,7 +14,7 @@ import BuildsTab from "./overview/deployments";
 import Logs from "./overview/logs";
 import MonitoringTab from "./overview/monitoring-app";
 import InternalHostnames from "./domains/ports-and-internal-hostnames";
-import NodePortsCard from "./domains/node-ports";
+import PublicEndpointsCard from "./domains/public-endpoints";
 import FileMount from "./volumes/file-mount";
 import WebhookDeploymentInfo from "./overview/webhook-deployment";
 import DbCredentials from "./credentials/db-crendentials";
@@ -25,7 +25,7 @@ import NetworkPolicy from "./advanced/network-policy";
 import HealthCheckSettings from "./advanced/health-check-settings";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import DbToolsCard from "./credentials/db-tools";
-import { RolePermissionEnum } from "@/shared/model/role-extended.model.ts";
+import { RolePermissionEnum } from "@/shared/model/role-extended.model";
 import { NodeInfoModel } from "@/shared/model/node-info.model";
 import { Eye, Key, Settings, Zap, Globe, HardDrive, Cog } from "lucide-react";
 import { AppSourceUtils } from "@/frontend/utils/app-source.utils";
@@ -95,7 +95,7 @@ export default function AppTabs({
             <TabsContent value="domains" className="space-y-4">
                 <DomainsList readonly={readonly} app={app} />
                 <InternalHostnames readonly={readonly} app={app} />
-                <NodePortsCard readonly={readonly} app={app} />
+                <PublicEndpointsCard readonly={readonly} app={app} />
             </TabsContent>
             <TabsContent value="storage" className="space-y-4">
                 <StorageList readonly={readonly} app={app} nodesInfo={nodesInfo} />

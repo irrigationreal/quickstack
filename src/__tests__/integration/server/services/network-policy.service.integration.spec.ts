@@ -22,11 +22,7 @@ describe('network-policy.service integration', () => {
     it('creates a NetworkPolicy that allows external ingress to App Node Ports', async () => {
         const namespace = 'node-port-policy-test';
         const { core, network } = ctx.getClients();
-        await core.createNamespace({
-            metadata: {
-                name: namespace,
-            },
-        });
+        await createNamespace(core, namespace);
 
         await networkPolicyService.reconcileNetworkPolicy({
             id: 'demo-app',
@@ -47,27 +43,19 @@ describe('network-policy.service integration', () => {
             ],
         } as AppExtendedModel);
 
-        const policy = await network.readNamespacedNetworkPolicy(KubeObjectNameUtils.toNetworkPolicyName('demo-app'), namespace);
+        const policy = await readNetworkPolicy(network, KubeObjectNameUtils.toNetworkPolicyName('demo-app'), namespace);
 
-        expect(policy.body.spec?.ingress).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    from: [{ ipBlock: { cidr: '0.0.0.0/0' } }],
-                    ports: [{ protocol: 'TCP', port: 300 }],
-                }),
-            ])
-        );
+        const nodePortRule = (policy.body.spec?.ingress ?? []).find((rule: any) =>
+            (rule.ports ?? []).some((port: any) => port.protocol === 'TCP' && port.port === 300));
+        expect(nodePortRule).toBeDefined();
+        expect(ingressPeers(nodePortRule)).toEqual([{ ipBlock: { cidr: '0.0.0.0/0' } }]);
     });
 
     it('creates a standard NetworkPolicy for a normal App with network policies enabled', async () => {
         const namespace = 'normal-app-policy-test';
         const appId = 'normal-app';
         const { core, network } = ctx.getClients();
-        await core.createNamespace({
-            metadata: {
-                name: namespace,
-            },
-        });
+        await createNamespace(core, namespace);
 
         await networkPolicyService.reconcileNetworkPolicy(createNetworkPolicyApp({
             id: appId,
@@ -78,7 +66,7 @@ describe('network-policy.service integration', () => {
             appNodePorts: [],
         }));
 
-        const policy = await network.readNamespacedNetworkPolicy(KubeObjectNameUtils.toNetworkPolicyName(appId), namespace);
+        const policy = await readNetworkPolicy(network, KubeObjectNameUtils.toNetworkPolicyName(appId), namespace);
 
         expect(policy.body.spec?.podSelector).toEqual({
             matchLabels: {
@@ -86,15 +74,9 @@ describe('network-policy.service integration', () => {
             },
         });
         expect(policy.body.spec?.policyTypes).toEqual(['Ingress', 'Egress']);
-        expect(policy.body.spec?.ingress).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    from: expect.arrayContaining([
-                        { podSelector: {} },
-                    ]),
-                }),
-            ])
-        );
+        expect((policy.body.spec?.ingress ?? []).some((rule: any) =>
+            ingressPeers(rule).some((peer: any) => isEmptySelector(peer.podSelector))))
+            .toBe(true);
         expect(policy.body.spec?.ingress).not.toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
@@ -108,11 +90,7 @@ describe('network-policy.service integration', () => {
         const namespace = 'disabled-app-policy-test';
         const appId = 'disabled-policy-app';
         const { core, network } = ctx.getClients();
-        await core.createNamespace({
-            metadata: {
-                name: namespace,
-            },
-        });
+        await createNamespace(core, namespace);
 
         const enabledApp = createNetworkPolicyApp({
             id: appId,
@@ -124,7 +102,7 @@ describe('network-policy.service integration', () => {
         });
         await networkPolicyService.reconcileNetworkPolicy(enabledApp);
 
-        await expect(network.readNamespacedNetworkPolicy(KubeObjectNameUtils.toNetworkPolicyName(appId), namespace))
+        await expect(readNetworkPolicy(network, KubeObjectNameUtils.toNetworkPolicyName(appId), namespace))
             .resolves
             .toBeDefined();
 
@@ -133,8 +111,8 @@ describe('network-policy.service integration', () => {
             useNetworkPolicy: false,
         });
 
-        const policies = await network.listNamespacedNetworkPolicy(namespace);
-        expect(policies.body.items.map(policy => policy.metadata?.name))
+        const policies = await listNetworkPolicies(network, namespace);
+        expect(policies.body.items.map((policy: any) => policy.metadata?.name))
             .not
             .toContain(KubeObjectNameUtils.toNetworkPolicyName(appId));
     });
@@ -145,11 +123,7 @@ describe('network-policy.service integration', () => {
             const namespace = toKubeName(`policy-matrix-${ingressPolicy}-${egressPolicy}`);
             const appId = 'matrix-app';
             const { core, network } = ctx.getClients();
-            await core.createNamespace({
-                metadata: {
-                    name: namespace,
-                },
-            });
+            await createNamespace(core, namespace);
 
             await networkPolicyService.reconcileNetworkPolicy(createNetworkPolicyApp({
                 id: appId,
@@ -160,7 +134,7 @@ describe('network-policy.service integration', () => {
                 appNodePorts: [],
             }));
 
-            const policy = await network.readNamespacedNetworkPolicy(KubeObjectNameUtils.toNetworkPolicyName(appId), namespace);
+            const policy = await readNetworkPolicy(network, KubeObjectNameUtils.toNetworkPolicyName(appId), namespace);
 
             expectIngressRules(policy.body.spec?.ingress ?? [], ingressPolicy);
             expectEgressRules(policy.body.spec?.egress ?? [], egressPolicy);
@@ -170,13 +144,9 @@ describe('network-policy.service integration', () => {
     it('allows an nginx Deployment to be reached through a node on NodePort 30081', async () => {
         const app = createNginxApp();
         const { core, apps } = ctx.getClients();
-        await core.createNamespace({
-            metadata: {
-                name: app.projectId,
-            },
-        });
+        await createNamespace(core, app.projectId);
 
-        await apps.createNamespacedDeployment(app.projectId, {
+        await createDeployment(apps, app.projectId, {
             metadata: {
                 name: app.id,
             },
@@ -223,6 +193,26 @@ describe('network-policy.service integration', () => {
     }, 180_000);
 });
 
+async function createNamespace(core: any, name: string) {
+    await core.createNamespace({ body: { metadata: { name } } });
+}
+
+async function readNetworkPolicy(network: any, name: string, namespace: string) {
+    return { body: await network.readNamespacedNetworkPolicy({ name, namespace }) };
+}
+
+async function listNetworkPolicies(network: any, namespace: string) {
+    return { body: await network.listNamespacedNetworkPolicy({ namespace }) };
+}
+
+async function createDeployment(apps: any, namespace: string, body: any) {
+    await apps.createNamespacedDeployment({ namespace, body });
+}
+
+async function readDeployment(apps: any, name: string, namespace: string) {
+    return { body: await apps.readNamespacedDeployment({ name, namespace }) };
+}
+
 function createNetworkPolicyApp(overrides: Pick<AppExtendedModel,
     'id' |
     'projectId' |
@@ -244,6 +234,7 @@ function createNetworkPolicyApp(overrides: Pick<AppExtendedModel,
         containerImageSource: 'nginx:1.27-alpine',
         appDomains: [],
         appPorts: [],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
@@ -311,6 +302,7 @@ function createNginxApp(): AppExtendedModel {
                 updatedAt: new Date(),
             },
         ],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
@@ -320,8 +312,8 @@ function createNginxApp(): AppExtendedModel {
     };
 }
 
-function expectIngressRules(rules: k8s.V1NetworkPolicyIngressRule[], policyType: AppNetworkPolicyType) {
-    const peers = rules.flatMap(rule => rule.from ?? []);
+function expectIngressRules(rules: any[], policyType: AppNetworkPolicyType) {
+    const peers = rules.flatMap(rule => ingressPeers(rule));
     const expectedPeers: Record<AppNetworkPolicyType, {
         traefik: boolean;
         namespace: boolean;
@@ -362,7 +354,7 @@ function expectIngressRules(rules: k8s.V1NetworkPolicyIngressRule[], policyType:
         .toBe(expectedPeers[policyType].dbTool);
 }
 
-function expectEgressRules(rules: k8s.V1NetworkPolicyEgressRule[], policyType: AppNetworkPolicyType) {
+function expectEgressRules(rules: any[], policyType: AppNetworkPolicyType) {
     const expectedRules: Record<AppNetworkPolicyType, {
         dns: boolean;
         internet: boolean;
@@ -395,6 +387,10 @@ function expectEgressRules(rules: k8s.V1NetworkPolicyEgressRule[], policyType: A
     expect(hasSameNamespaceEgressPeer(rules)).toBe(expectedRules[policyType].namespace);
 }
 
+function ingressPeers(rule: any) {
+    return rule.from ?? rule._from ?? [];
+}
+
 function hasTraefikIngressPeer(peers: k8s.V1NetworkPolicyPeer[]) {
     return peers.some(peer =>
         peer.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'kube-system' &&
@@ -410,33 +406,33 @@ function hasContainerTypePeer(peers: k8s.V1NetworkPolicyPeer[], containerType: s
         peer.podSelector?.matchLabels?.[Constants.QS_ANNOTATION_CONTAINER_TYPE] === containerType);
 }
 
-function hasDnsEgressRule(rules: k8s.V1NetworkPolicyEgressRule[]) {
+function hasDnsEgressRule(rules: any[]) {
     return rules.some(rule => {
         const ports = rule.ports ?? [];
         const destinations = rule.to ?? [];
-        return ports.some(port => port.protocol === 'UDP' && port.port === 53) &&
-            ports.some(port => port.protocol === 'TCP' && port.port === 53) &&
-            destinations.some(destination =>
+        return ports.some((port: any) => port.protocol === 'UDP' && port.port === 53) &&
+            ports.some((port: any) => port.protocol === 'TCP' && port.port === 53) &&
+            destinations.some((destination: any) =>
                 destination.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'kube-system' &&
                 destination.podSelector?.matchLabels?.['k8s-app'] === 'kube-dns') &&
-            destinations.some(destination =>
+            destinations.some((destination: any) =>
                 destination.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'kube-system' &&
                 destination.podSelector?.matchLabels?.['k8s-app'] === 'coredns');
     });
 }
 
-function hasInternetEgressPeer(rules: k8s.V1NetworkPolicyEgressRule[]) {
+function hasInternetEgressPeer(rules: any[]) {
     return rules.some(rule =>
-        (rule.to ?? []).some(destination =>
+        (rule.to ?? []).some((destination: any) =>
             destination.ipBlock?.cidr === '0.0.0.0/0' &&
             destination.ipBlock?.except?.includes('10.0.0.0/8') &&
             destination.ipBlock?.except?.includes('172.16.0.0/12') &&
             destination.ipBlock?.except?.includes('192.168.0.0/16')));
 }
 
-function hasSameNamespaceEgressPeer(rules: k8s.V1NetworkPolicyEgressRule[]) {
+function hasSameNamespaceEgressPeer(rules: any[]) {
     return rules.some(rule =>
-        (rule.to ?? []).some(destination =>
+        (rule.to ?? []).some((destination: any) =>
             isEmptySelector(destination.podSelector)));
 }
 
@@ -467,14 +463,14 @@ async function fetchNodePortFromK3sNode(container: StartedK3sContainer, nodePort
 }
 
 async function waitForDeploymentAvailable(
-    apps: k8s.AppsV1Api,
+    apps: any,
     namespace: string,
     name: string
 ) {
     return await waitFor(async () => {
-        const deployment = await apps.readNamespacedDeployment(name, namespace);
+        const deployment = await readDeployment(apps, name, namespace);
         const status = deployment.body.status;
-        const available = status?.conditions?.some(condition =>
+        const available = status?.conditions?.some((condition: any) =>
             condition.type === 'Available' && condition.status === 'True');
         if (available && status?.readyReplicas === 1 && status?.availableReplicas === 1) {
             return deployment.body;

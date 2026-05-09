@@ -1,6 +1,6 @@
 import * as z from "zod"
 
-import { CompleteProject, RelatedProjectModel, CompleteAppDomain, RelatedAppDomainModel, CompleteAppPort, RelatedAppPortModel, CompleteAppNodePort, RelatedAppNodePortModel, CompleteAppVolume, RelatedAppVolumeModel, CompleteAppFileMount, RelatedAppFileMountModel, CompleteAppBasicAuth, RelatedAppBasicAuthModel, CompleteAppSecretEnvVar, RelatedAppSecretEnvVarModel, CompleteAppGitSshKey, RelatedAppGitSshKeyModel, CompleteQuickDeployBuild, RelatedQuickDeployBuildModel, CompleteRoleAppPermission, RelatedRoleAppPermissionModel } from "./index"
+import { CompleteProject, RelatedProjectModel, CompleteAppDomain, RelatedAppDomainModel, CompleteAppPort, RelatedAppPortModel, CompleteAppNodePort, RelatedAppNodePortModel, CompleteAppPublicEndpoint, RelatedAppPublicEndpointModel, CompleteAppVolume, RelatedAppVolumeModel, CompleteAppFileMount, RelatedAppFileMountModel, CompleteAppBasicAuth, RelatedAppBasicAuthModel, CompleteAppSecretEnvVar, RelatedAppSecretEnvVarModel, CompleteAppGitSshKey, RelatedAppGitSshKeyModel, CompleteQuickDeployBuild, RelatedQuickDeployBuildModel, CompleteRoleAppPermission, RelatedRoleAppPermissionModel } from "./index"
 
 export const AppModel = z.object({
   id: z.string(),
@@ -51,6 +51,7 @@ export interface CompleteApp extends z.infer<typeof AppModel> {
   appDomains: CompleteAppDomain[]
   appPorts: CompleteAppPort[]
   appNodePorts: CompleteAppNodePort[]
+  appPublicEndpoints: CompleteAppPublicEndpoint[]
   appVolumes: CompleteAppVolume[]
   appFileMounts: CompleteAppFileMount[]
   appBasicAuths: CompleteAppBasicAuth[]
@@ -70,6 +71,7 @@ export const RelatedAppModel: z.ZodSchema<CompleteApp> = z.lazy(() => AppModel.e
   appDomains: RelatedAppDomainModel.array(),
   appPorts: RelatedAppPortModel.array(),
   appNodePorts: RelatedAppNodePortModel.array(),
+  appPublicEndpoints: RelatedAppPublicEndpointModel.array(),
   appVolumes: RelatedAppVolumeModel.array(),
   appFileMounts: RelatedAppFileMountModel.array(),
   appBasicAuths: RelatedAppBasicAuthModel.array(),

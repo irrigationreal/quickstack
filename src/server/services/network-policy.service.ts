@@ -4,6 +4,7 @@ import { V1NamespaceList, V1NetworkPolicy, V1NetworkPolicyList } from "@kubernet
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { Constants } from "../../shared/utils/constants";
 import { appNetworkPolicy, AppNetworkPolicyType } from "@/shared/model/network-policy.model";
+import { PUBLIC_ENDPOINT_GATEWAY_LABEL, PUBLIC_ENDPOINT_NAMESPACE } from "@/shared/model/public-endpoint.model";
 
 type NetworkPolicyManifest = any;
 type NetworkPolicyRule = any;
@@ -45,7 +46,7 @@ class NetworkPolicyService {
                     }
                 },
                 policyTypes: ["Ingress", "Egress"],
-                ingress: this.getIngressRules(ingressPolicy, app.appNodePorts),
+                ingress: this.getIngressRules(ingressPolicy, app.appNodePorts, app.appPublicEndpoints ?? []),
                 egress: this.getEgressRules(egressPolicy)
             }
         };
@@ -57,7 +58,25 @@ class NetworkPolicyService {
         return parsed.success ? parsed.data : 'ALLOW_ALL';
     }
 
-    private getIngressRules(policyType: AppNetworkPolicyType, nodePorts: { port: number; protocol?: string }[] = []): NetworkPolicyRule[] {
+    private toUniquePolicyPorts<T extends { protocol?: string }>(items: T[], getPort: (item: T) => number) {
+        const seen = new Set<string>();
+        return items.flatMap(item => {
+            const protocol = item.protocol || 'TCP';
+            const port = getPort(item);
+            const key = `${protocol}:${port}`;
+            if (seen.has(key)) {
+                return [];
+            }
+            seen.add(key);
+            return [{ protocol: protocol as any, port: port as any }];
+        });
+    }
+
+    private getIngressRules(
+        policyType: AppNetworkPolicyType,
+        nodePorts: { port: number; protocol?: string }[] = [],
+        publicEndpoints: { targetPort: number; protocol?: string }[] = [],
+    ): NetworkPolicyRule[] {
         const rules: NetworkPolicyRule[] = [];
 
         const traefikFrom: NetworkPolicyPeer[] = [
@@ -88,6 +107,21 @@ class NetworkPolicyService {
              }*/
         ];
 
+        const endpointGatewayFrom: NetworkPolicyPeer[] = [
+            {
+                namespaceSelector: {
+                    matchLabels: {
+                        'kubernetes.io/metadata.name': PUBLIC_ENDPOINT_NAMESPACE
+                    }
+                },
+                podSelector: {
+                    matchLabels: {
+                        'app.kubernetes.io/name': PUBLIC_ENDPOINT_GATEWAY_LABEL
+                    }
+                }
+            }
+        ];
+
         const backupPodFrom: NetworkPolicyPeer[] = [{
             podSelector: {
                 matchLabels: {
@@ -107,7 +141,7 @@ class NetworkPolicyService {
         if (policyType === 'ALLOW_ALL') {
             // Allow from same namespace and from Traefik (internet traffic comes through Traefik)
             rules.push({
-                from: [
+                _from: [
                     ...traefikFrom,
                     {
                         podSelector: {} // Selects all pods in the same namespace
@@ -118,7 +152,7 @@ class NetworkPolicyService {
             // Allow from Traefik (internet traffic comes through Traefik) and from DB-backup jobs.
             // Block other internal pod traffic.
             rules.push({
-                from: [
+                _from: [
                     ...traefikFrom,
                     ...backupPodFrom,
                     ...dbToolPod
@@ -127,14 +161,14 @@ class NetworkPolicyService {
         } else if (policyType === 'NAMESPACE_ONLY') {
             // Allow only from same namespace
             rules.push({
-                from: [{
+                _from: [{
                     podSelector: {} // Selects all pods in the same namespace
                 }]
             });
         } else if (policyType === 'DENY_ALL') {
             // No rules means deny all --> except the separate container for database backups
             rules.push({
-                from: [
+                _from: [
                     ...backupPodFrom,
                     ...dbToolPod
                 ]
@@ -142,22 +176,20 @@ class NetworkPolicyService {
         }
 
         if (nodePorts.length > 0) {
-            const exposedPorts = nodePorts
-                .filter((nodePort, index, self) =>
-                    index === self.findIndex(item =>
-                        item.port === nodePort.port && (item.protocol || 'TCP') === (nodePort.protocol || 'TCP')))
-                .map(nodePort => ({
-                    protocol: (nodePort.protocol || 'TCP') as any,
-                    port: nodePort.port as any
-                }));
-
             rules.push({
-                from: [{
+                _from: [{
                     ipBlock: {
                         cidr: '0.0.0.0/0'
                     }
                 }],
-                ports: exposedPorts
+                ports: this.toUniquePolicyPorts(nodePorts, nodePort => nodePort.port)
+            });
+        }
+
+        if (publicEndpoints.length > 0) {
+            rules.push({
+                _from: endpointGatewayFrom,
+                ports: this.toUniquePolicyPorts(publicEndpoints, endpoint => endpoint.targetPort)
             });
         }
 
@@ -303,7 +335,7 @@ class NetworkPolicyService {
                 ingress: [
                     {
                         // Allow from Traefik (internet traffic)
-                        from: [
+                        _from: [
                             {
                                 namespaceSelector: {
                                     matchLabels: {
@@ -409,7 +441,7 @@ class NetworkPolicyService {
                 ingress: [
                     {
                         // Allow from Traefik (internet traffic)
-                        from: [
+                        _from: [
                             {
                                 namespaceSelector: {
                                     matchLabels: {

@@ -68,6 +68,51 @@ describe('svc.service', () => {
         });
     });
 
+    it('keeps the app service ClusterIP when only public endpoints are configured', async () => {
+        const app = createApp({
+            appPorts: [
+                {
+                    id: 'app-port-1',
+                    appId: 'demo-app',
+                    port: 8000,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            ],
+            appPublicEndpoints: [
+                {
+                    id: 'public-endpoint-1',
+                    appId: 'demo-app',
+                    name: 'ssh',
+                    publicIp: '65.21.9.20',
+                    publicPort: 2222,
+                    targetPort: 8000,
+                    protocol: 'TCP',
+                    sourceCidrsJson: null,
+                    proxyProtocol: false,
+                    enabled: true,
+                    status: 'PENDING',
+                    lastError: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            ],
+        });
+
+        await svcService.createOrUpdateServiceForApp('deployment-1', app);
+
+        expect(k3sMocks.createNamespacedService).toHaveBeenCalledTimes(1);
+        const [, service] = k3sMocks.createNamespacedService.mock.calls[0];
+        expect(service.spec.type).toBeUndefined();
+        expect(service.spec.ports).toEqual([
+            expect.objectContaining({
+                name: 'default-port-app-port-1',
+                port: 8000,
+                targetPort: 8000,
+            }),
+        ]);
+    });
+
     it('merges an App Node Port into an existing app port for the same container port', async () => {
         const app = createApp({
             appPorts: [
@@ -160,6 +205,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         appDomains: [],
         appPorts: [],
         appNodePorts: [],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],

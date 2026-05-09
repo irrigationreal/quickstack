@@ -191,6 +191,7 @@ model Project {
   apps                   App[]
   quickDeployBuilds      QuickDeployBuild[]
   roleProjectPermissions RoleProjectPermission[]
+  publicAddressPools     PublicAddressPool[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -250,6 +251,7 @@ model App {
   appDomains         AppDomain[]
   appPorts           AppPort[]
   appNodePorts       AppNodePort[]
+  appPublicEndpoints AppPublicEndpoint[]
   appVolumes         AppVolume[]
   appFileMounts      AppFileMount[]
   appBasicAuths      AppBasicAuth[]
@@ -297,6 +299,60 @@ model AppNodePort {
   updatedAt DateTime @updatedAt
 
   @@unique([nodePort])
+}
+
+model PublicAddressPool {
+  id            String @id @default(uuid())
+  projectId     String?
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String
+  addressesJson String
+  purpose       String @default("PUBLIC_ENDPOINTS") // PUBLIC_ENDPOINTS, WEB_INGRESS, RESERVED
+  enabled       Boolean @default(true)
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+}
+
+model PublicEndpointReservation {
+  id         String @id @default(uuid())
+  publicIp   String
+  publicPort Int
+  protocol   String @default("TCP")
+  ownerType  String @default("SYSTEM") // SYSTEM, APP
+  ownerId    String?
+  name       String?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([publicIp, publicPort, protocol])
+}
+
+model AppPublicEndpoint {
+  id              String @id @default(uuid())
+  appId           String
+  app             App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  name            String?
+  publicIp        String
+  publicPort      Int
+  targetPort      Int
+  protocol        String @default("TCP")
+  sourceCidrsJson String?
+  proxyProtocol   Boolean @default(false)
+  enabled         Boolean @default(true)
+  status          String @default("PENDING") // PENDING, ACTIVE, FAILED, DISABLED
+  lastError       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([publicIp, publicPort, protocol])
+  @@index([appId])
 }
 
 model AppDomain {

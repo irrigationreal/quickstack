@@ -1,6 +1,6 @@
 import * as z from "zod"
 
-import { CompleteApp, RelatedAppModel, CompleteQuickDeployBuild, RelatedQuickDeployBuildModel, CompleteRoleProjectPermission, RelatedRoleProjectPermissionModel } from "./index"
+import { CompleteApp, RelatedAppModel, CompleteQuickDeployBuild, RelatedQuickDeployBuildModel, CompleteRoleProjectPermission, RelatedRoleProjectPermissionModel, CompletePublicAddressPool, RelatedPublicAddressPoolModel } from "./index"
 
 export const ProjectModel = z.object({
   id: z.string(),
@@ -13,6 +13,7 @@ export interface CompleteProject extends z.infer<typeof ProjectModel> {
   apps: CompleteApp[]
   quickDeployBuilds: CompleteQuickDeployBuild[]
   roleProjectPermissions: CompleteRoleProjectPermission[]
+  publicAddressPools: CompletePublicAddressPool[]
 }
 
 /**
@@ -24,4 +25,5 @@ export const RelatedProjectModel: z.ZodSchema<CompleteProject> = z.lazy(() => Pr
   apps: RelatedAppModel.array(),
   quickDeployBuilds: RelatedQuickDeployBuildModel.array(),
   roleProjectPermissions: RelatedRoleProjectPermissionModel.array(),
+  publicAddressPools: RelatedPublicAddressPoolModel.array(),
 }))
