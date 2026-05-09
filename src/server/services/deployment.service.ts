@@ -187,6 +187,7 @@ class DeploymentService {
                                 ...(app.containerArgs ? { args: JSON.parse(app.containerArgs) } : {}),
                                 ...(app.securityContextPrivileged ? { securityContext: { privileged: true } } : {}),
                                 ...(envVars.length > 0 ? { env: envVars } : {}),
+                                ...(appSecretName ? { envFrom: [{ secretRef: { name: appSecretName } }] } : {}),
                                 ...(allVolumeMounts.length > 0 ? { volumeMounts: allVolumeMounts } : {}),
                             }
                         ],

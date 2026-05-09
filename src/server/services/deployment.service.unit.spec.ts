@@ -13,6 +13,12 @@ const paramMocks = vi.hoisted(() => ({
     getStringUncached: vi.fn(),
 }));
 
+const secretMocks = vi.hoisted(() => ({
+    createOrUpdateDockerPullSecret: vi.fn(),
+    createOrUpdateAppSecretEnvVars: vi.fn(),
+    delteUnusedSecrets: vi.fn(),
+}));
+
 vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({
     default: {
         apps: {
@@ -75,11 +81,7 @@ vi.mock('@/server/services/config-map.service', () => ({
     },
 }));
 vi.mock('@/server/services/secret.service', () => ({
-    default: {
-        createOrUpdateDockerPullSecret: vi.fn().mockResolvedValue(undefined),
-        createOrUpdateAppSecretEnvVars: vi.fn().mockResolvedValue(undefined),
-        delteUnusedSecrets: vi.fn(),
-    },
+    default: secretMocks,
 }));
 vi.mock('@/server/services/file-browser-service', () => ({
     default: {
@@ -109,6 +111,26 @@ describe('deployment.service RuntimeClass support', () => {
         runtimeClassMocks.assertRuntimeClassHealthy.mockResolvedValue({ runtimeClassName: 'kata', healthy: true, checkedAt: new Date(), nodeName: 'node-1', runtimeProof: 'kata', message: 'ok', nodes: [{ nodeName: 'node-1', healthy: true, runtimeProof: 'kata', podPhase: 'Running', message: 'ok' }] });
         runtimeClassMocks.isKataRuntimeClass.mockImplementation((name: string) => /kata/i.test(name));
         paramMocks.getStringUncached.mockResolvedValue(undefined);
+        secretMocks.createOrUpdateDockerPullSecret.mockResolvedValue(undefined);
+        secretMocks.createOrUpdateAppSecretEnvVars.mockResolvedValue(undefined);
+    });
+
+    it('adds secret env vars through envFrom when the app has generated secrets', async () => {
+        secretMocks.createOrUpdateAppSecretEnvVars.mockResolvedValue('app-secret-env-demo-app');
+
+        await deploymentService.createDeployment('deployment-1', createApp({
+            appSecretEnvVars: [{
+                id: 'secret-1',
+                appId: 'demo-app',
+                name: 'REDIS_URL',
+                encryptedValue: 'encrypted',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }],
+        }));
+
+        const [, body] = k3sMocks.createNamespacedDeployment.mock.calls[0];
+        expect(body.spec.template.spec.containers[0].envFrom).toEqual([{ secretRef: { name: 'app-secret-env-demo-app' } }]);
     });
 
     it('sets runtimeClassName on the pod template when configured', async () => {
