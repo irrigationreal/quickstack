@@ -72,7 +72,7 @@ Never read credentials from `.quickdeploy` and never write them there. `.quickde
 
 Detect `compose.yaml`, `compose.yml`, `docker-compose.yaml`, or `docker-compose.yml`.
 
-Translate supported service fields: `image`, `build`, `ports`, `environment`, `env_file`, `.env`, `volumes`, `command`, `entrypoint`, `depends_on`, simple replica/resource hints.
+Translate supported service fields: `image`, `build`, `ports`, `environment`, `env_file`, `.env`, `volumes`, `command`, `entrypoint`, `depends_on`, simple same-cluster replica/resource hints. QuickStack v1 replicas are Kubernetes replicas inside the connected QuickStack cluster; do not describe them as multi-region placement or failover.
 
 Ask before deploying:
 
