@@ -5,11 +5,12 @@ const k3sMocks = vi.hoisted(() => ({
 }));
 
 const runtimeClassMocks = vi.hoisted(() => ({
-    assertRuntimeClassExists: vi.fn(),
+    assertRuntimeClassHealthy: vi.fn(),
+    isKataRuntimeClass: vi.fn(),
 }));
 
 const paramMocks = vi.hoisted(() => ({
-    getString: vi.fn(),
+    getStringUncached: vi.fn(),
 }));
 
 vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({
@@ -24,13 +25,14 @@ vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({
 
 vi.mock('@/server/services/runtime-class.service', () => ({
     default: {
-        assertRuntimeClassExists: runtimeClassMocks.assertRuntimeClassExists,
+        assertRuntimeClassHealthy: runtimeClassMocks.assertRuntimeClassHealthy,
+        isKataRuntimeClass: runtimeClassMocks.isKataRuntimeClass,
     },
 }));
 
 vi.mock('@/server/services/param.service', () => ({
     default: {
-        getString: paramMocks.getString,
+        getStringUncached: paramMocks.getStringUncached,
     },
     ParamService: {
         DEFAULT_APP_RUNTIME_CLASS: 'defaultAppRuntimeClass',
@@ -90,6 +92,11 @@ vi.mock('@/server/services/network-policy.service', () => ({
         reconcileNetworkPolicy: vi.fn(),
     },
 }));
+vi.mock('@/server/services/public-endpoint.service', () => ({
+    default: {
+        reconcileForApp: vi.fn(),
+    },
+}));
 
 import deploymentService from './deployment.service';
 import { AppExtendedModel } from '@/shared/model/app-extended.model';
@@ -99,34 +106,35 @@ describe('deployment.service RuntimeClass support', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         k3sMocks.listNamespacedDeployment.mockResolvedValue({ body: { items: [] } });
-        runtimeClassMocks.assertRuntimeClassExists.mockResolvedValue(undefined);
-        paramMocks.getString.mockResolvedValue(undefined);
+        runtimeClassMocks.assertRuntimeClassHealthy.mockResolvedValue({ runtimeClassName: 'kata', healthy: true, checkedAt: new Date(), nodeName: 'node-1', runtimeProof: 'kata', message: 'ok', nodes: [{ nodeName: 'node-1', healthy: true, runtimeProof: 'kata', podPhase: 'Running', message: 'ok' }] });
+        runtimeClassMocks.isKataRuntimeClass.mockImplementation((name: string) => /kata/i.test(name));
+        paramMocks.getStringUncached.mockResolvedValue(undefined);
     });
 
     it('sets runtimeClassName on the pod template when configured', async () => {
         await deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: 'kata' }));
 
-        expect(runtimeClassMocks.assertRuntimeClassExists).toHaveBeenCalledWith('kata');
+        expect(runtimeClassMocks.assertRuntimeClassHealthy).toHaveBeenCalledWith('kata');
         const [, body] = k3sMocks.createNamespacedDeployment.mock.calls[0];
         expect(body.spec.template.spec.runtimeClassName).toBe('kata');
     });
 
     it('uses the server default RuntimeClass when no app override is configured', async () => {
-        paramMocks.getString.mockResolvedValue('kata-default');
+        paramMocks.getStringUncached.mockResolvedValue('kata-default');
 
         await deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: null }));
 
-        expect(runtimeClassMocks.assertRuntimeClassExists).toHaveBeenCalledWith('kata-default');
+        expect(runtimeClassMocks.assertRuntimeClassHealthy).toHaveBeenCalledWith('kata-default');
         const [, body] = k3sMocks.createNamespacedDeployment.mock.calls[0];
         expect(body.spec.template.spec.runtimeClassName).toBe('kata-default');
     });
 
     it('prefers the app RuntimeClass override over the server default', async () => {
-        paramMocks.getString.mockResolvedValue('kata-default');
+        paramMocks.getStringUncached.mockResolvedValue('kata-default');
 
         await deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: 'kata-qemu' }));
 
-        expect(runtimeClassMocks.assertRuntimeClassExists).toHaveBeenCalledWith('kata-qemu');
+        expect(runtimeClassMocks.assertRuntimeClassHealthy).toHaveBeenCalledWith('kata-qemu');
         const [, body] = k3sMocks.createNamespacedDeployment.mock.calls[0];
         expect(body.spec.template.spec.runtimeClassName).toBe('kata-qemu');
     });
@@ -139,11 +147,22 @@ describe('deployment.service RuntimeClass support', () => {
     });
 
     it('fails before applying the Deployment when the RuntimeClass is unavailable', async () => {
-        runtimeClassMocks.assertRuntimeClassExists.mockRejectedValue(new ServiceException('RuntimeClass "missing" is not available in this cluster.'));
+        runtimeClassMocks.assertRuntimeClassHealthy.mockRejectedValue(new ServiceException('RuntimeClass "missing" is not available in this cluster.'));
 
         await expect(deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: 'missing' })))
             .rejects.toThrow('RuntimeClass "missing" is not available');
 
+        expect(k3sMocks.createNamespacedDeployment).not.toHaveBeenCalled();
+        expect(k3sMocks.replaceNamespacedDeployment).not.toHaveBeenCalled();
+    });
+
+    it('rejects privileged apps before creating a Deployment when Kata is selected', async () => {
+        await expect(deploymentService.createDeployment('deployment-1', createApp({
+            runtimeClassName: 'kata',
+            securityContextPrivileged: true,
+        }))).rejects.toThrow('privileged containers are not compatible');
+
+        expect(runtimeClassMocks.assertRuntimeClassHealthy).not.toHaveBeenCalled();
         expect(k3sMocks.createNamespacedDeployment).not.toHaveBeenCalled();
         expect(k3sMocks.replaceNamespacedDeployment).not.toHaveBeenCalled();
     });
@@ -199,6 +218,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         appDomains: [],
         appPorts: [],
         appNodePorts: [],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],

@@ -41,7 +41,7 @@ export default function QsRuntimeClassSettings({ settings }: { settings: Runtime
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Runtime isolation</CardTitle>
                 <CardDescription>
-                    Select an existing Kubernetes RuntimeClass, such as a Kata Containers class, for VM-backed app isolation. QuickStack does not install Kata or configure node runtime handlers from this screen.
+                    Select a RuntimeClass for user apps only. Kata classes fail closed unless QuickStack can run a fresh per-node probe and read VM-backed runtime evidence before deployment.
                 </CardDescription>
             </CardHeader>
             <Form {...form}>
@@ -57,7 +57,7 @@ export default function QsRuntimeClassSettings({ settings }: { settings: Runtime
                                         <Input placeholder="e.g., kata" {...field} value={field.value ?? ''} />
                                     </FormControl>
                                     <p className="text-xs text-muted-foreground">
-                                        Leave empty to use the cluster default runtime. App-level overrides still win over this default.
+                                        Leave empty to use the node default runtime. Saving a Kata default runs the health probe now; every future deploy runs a fresh probe before creating Kubernetes objects. App-level overrides still win.
                                     </p>
                                     <FormMessage />
                                 </FormItem>
@@ -68,7 +68,7 @@ export default function QsRuntimeClassSettings({ settings }: { settings: Runtime
                             <div>
                                 <p className="text-sm font-medium">Discovered RuntimeClasses</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Discovery proves the RuntimeClass object exists. Pods can still fail if eligible nodes do not have the handler configured.
+                                    Kata health means a probe pod used the RuntimeClass on every eligible Ready node and returned runtime evidence. A missing or stale probe blocks new Kata deployments.
                                 </p>
                             </div>
                             <Table>
@@ -78,12 +78,13 @@ export default function QsRuntimeClassSettings({ settings }: { settings: Runtime
                                         <TableHead>Handler</TableHead>
                                         <TableHead>Scheduling</TableHead>
                                         <TableHead>Overhead</TableHead>
+                                        <TableHead>Health</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {settings.runtimeClasses.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-muted-foreground">No RuntimeClasses found.</TableCell>
+                                            <TableCell colSpan={5} className="text-muted-foreground">No RuntimeClasses found.</TableCell>
                                         </TableRow>
                                     )}
                                     {settings.runtimeClasses.map(runtimeClass => (
@@ -92,6 +93,13 @@ export default function QsRuntimeClassSettings({ settings }: { settings: Runtime
                                             <TableCell>{runtimeClass.handler}</TableCell>
                                             <TableCell>{runtimeClass.hasScheduling ? 'Configured' : 'None'}</TableCell>
                                             <TableCell>{runtimeClass.hasOverhead ? 'Configured' : 'None'}</TableCell>
+                                            <TableCell>
+                                                {runtimeClass.isKata
+                                                    ? runtimeClass.health
+                                                        ? `${runtimeClass.health.healthy ? 'Healthy' : 'Failing'} (${runtimeClass.health.nodes?.length ?? 0} node${runtimeClass.health.nodes?.length === 1 ? '' : 's'})`
+                                                        : 'Not probed'
+                                                    : 'Object exists'}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

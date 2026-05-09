@@ -18,7 +18,7 @@ const paramMocks = vi.hoisted(() => ({
 }));
 
 const runtimeClassMocks = vi.hoisted(() => ({
-    assertRuntimeClassExists: vi.fn(),
+    assertRuntimeClassHealthy: vi.fn(),
     getRuntimeClasses: vi.fn(),
 }));
 
@@ -78,7 +78,7 @@ describe('server settings RuntimeClass actions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         sessionMocks.getAdminUserSession.mockResolvedValue({ userId: 'user-1', email: 'admin@example.com' });
-        runtimeClassMocks.assertRuntimeClassExists.mockResolvedValue(undefined);
+        runtimeClassMocks.assertRuntimeClassHealthy.mockResolvedValue({ runtimeClassName: 'kata', healthy: true, checkedAt: new Date(), nodeName: 'node-1', runtimeProof: 'kata', message: 'ok', nodes: [{ nodeName: 'node-1', healthy: true, runtimeProof: 'kata', podPhase: 'Running', message: 'ok' }] });
         runtimeClassMocks.getRuntimeClasses.mockResolvedValue([{ name: 'kata', handler: 'kata', hasScheduling: false, hasOverhead: false }]);
         paramMocks.getString.mockResolvedValue(undefined);
     });
@@ -86,7 +86,7 @@ describe('server settings RuntimeClass actions', () => {
     it('preflights and saves an available default app RuntimeClass', async () => {
         await saveRuntimeClassSettings({}, { defaultAppRuntimeClass: ' kata ' });
 
-        expect(runtimeClassMocks.assertRuntimeClassExists).toHaveBeenCalledWith('kata');
+        expect(runtimeClassMocks.assertRuntimeClassHealthy).toHaveBeenCalledWith('kata');
         expect(paramMocks.save).toHaveBeenCalledWith({ name: 'defaultAppRuntimeClass', value: 'kata' });
         expect(auditMocks.recordBestEffort).toHaveBeenCalledWith(expect.objectContaining({
             action: 'SECURITY_RUNTIME_CLASS_UPDATE',
@@ -96,7 +96,7 @@ describe('server settings RuntimeClass actions', () => {
     });
 
     it('does not save an unavailable default app RuntimeClass', async () => {
-        runtimeClassMocks.assertRuntimeClassExists.mockRejectedValue(new ServiceException('RuntimeClass "missing" is not available in this cluster.'));
+        runtimeClassMocks.assertRuntimeClassHealthy.mockRejectedValue(new ServiceException('RuntimeClass "missing" is not available in this cluster.'));
 
         await expect(saveRuntimeClassSettings({}, { defaultAppRuntimeClass: 'missing' }))
             .rejects.toThrow('RuntimeClass "missing" is not available');

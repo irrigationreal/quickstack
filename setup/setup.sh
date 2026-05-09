@@ -2,6 +2,40 @@
 
 # curl -sfL https://get.quickstack.dev/setup.sh | sh -
 
+install_kata_runtime_if_requested() {
+  if [ "${INSTALL_KATA_RUNTIME:-}" != "true" ]; then
+    return
+  fi
+
+  if [ ! -e /dev/kvm ]; then
+    echo "Error: INSTALL_KATA_RUNTIME=true but /dev/kvm is missing. Expose nested virtualization before installing Kata."
+    exit 1
+  fi
+  if ! grep -Eq '(vmx|svm)' /proc/cpuinfo; then
+    echo "Error: INSTALL_KATA_RUNTIME=true but CPU virtualization flags vmx/svm are missing."
+    exit 1
+  fi
+
+  sudo apt-get install -y kata-runtime
+  sudo mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
+  sudo tee /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl >/dev/null <<'EOF'
+{{ template "base" . }}
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+  runtime_type = "io.containerd.kata.v2"
+EOF
+  sudo tee /tmp/quickstack-runtimeclass-kata.yaml >/dev/null <<'EOF'
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata
+scheduling:
+  nodeSelector:
+    quickstack.io/kata-runtime: "true"
+EOF
+}
+
 select_network_interface() {
   if [ -z "$INSTALL_K3S_INTERFACE" ]; then
     interfaces_with_ips=$(ip -o -4 addr show | awk '!/^[0-9]*: lo:/ {print $2, $4}' | cut -d'/' -f1)
@@ -122,9 +156,16 @@ echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.co
 sudo apt-get update
 sudo apt-get install helm
 
+install_kata_runtime_if_requested
+
 # Installation of k3s
 echo "Installing k3s with --flannel-iface=$selected_iface"
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=$selected_iface" INSTALL_K3S_VERSION="$K3S_VERSION" sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-iface=$selected_iface --disable=servicelb" INSTALL_K3S_VERSION="$K3S_VERSION" sh -
+if [ "${INSTALL_KATA_RUNTIME:-}" = "true" ]; then
+  sudo k3s kubectl label node "$(hostname)" quickstack.io/kata-runtime=true --overwrite
+  sudo k3s kubectl apply -f /tmp/quickstack-runtimeclass-kata.yaml
+  sudo systemctl restart k3s
+fi
 # Todo: Check for Ready node, takes ~30 seconds
 sudo k3s kubectl get node
 

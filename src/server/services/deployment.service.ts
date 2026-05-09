@@ -19,6 +19,7 @@ import secretService from "./secret.service";
 import fileBrowserService from "./file-browser-service";
 import podService from "./pod.service";
 import networkPolicyService from "./network-policy.service";
+import publicEndpointService from "./public-endpoint.service";
 import runtimeClassService from "./runtime-class.service";
 import paramService, { ParamService } from "./param.service";
 import { normalizeRuntimeClassName } from "@/shared/model/app-container-config.model";
@@ -38,7 +39,7 @@ class DeploymentService {
             return { name: appRuntimeClassName, source: 'APP_OVERRIDE' };
         }
 
-        const defaultRuntimeClassName = normalizeRuntimeClassName(await paramService.getString(ParamService.DEFAULT_APP_RUNTIME_CLASS));
+        const defaultRuntimeClassName = normalizeRuntimeClassName(await paramService.getStringUncached(ParamService.DEFAULT_APP_RUNTIME_CLASS));
         if (defaultRuntimeClassName) {
             return { name: defaultRuntimeClassName, source: 'SERVER_DEFAULT' };
         }
@@ -78,9 +79,13 @@ class DeploymentService {
         return returnVal;
     }
 
-    async validateDeployment(app: AppExtendedModel) {
+    async validateDeployment(app: AppExtendedModel, runtimeClass: ResolvedRuntimeClass = { name: null, source: 'NONE' }) {
         if (app.replicas > 1 && app.appVolumes.length > 0 && app.appVolumes.every(vol => vol.accessMode === 'ReadWriteOnce')) {
             throw new ServiceException("Deployment with more than one replica is not possible if access mode of one volume is ReadWriteOnce.");
+        }
+
+        if (runtimeClass.name && runtimeClassService.isKataRuntimeClass(runtimeClass.name) && app.securityContextPrivileged) {
+            throw new ServiceException(`App "${app.name}" cannot use Kata RuntimeClass "${runtimeClass.name}" because privileged containers are not compatible with VM-backed app isolation. Disable privileged mode or choose the default runc runtime for this app.`);
         }
 
         // Validate containerArgs is valid JSON array if provided
@@ -101,7 +106,14 @@ class DeploymentService {
         gitCommitMessage?: string,
         buildMethod?: AppBuildMethod,
     ) {
-        await this.validateDeployment(app);
+        const runtimeClass = await this.resolveRuntimeClassForApp(app);
+        await this.validateDeployment(app, runtimeClass);
+        if (runtimeClass.name) {
+            const health = await runtimeClassService.assertRuntimeClassHealthy(runtimeClass.name);
+            dlog(deploymentId, runtimeClassService.isKataRuntimeClass(runtimeClass.name)
+                ? `Configured RuntimeClass: ${runtimeClass.name} (${runtimeClass.source === 'APP_OVERRIDE' ? 'app override' : 'server default'}). Fresh Kata health probe passed on ${(health.nodes ?? []).length || 1} eligible node(s).`
+                : `Configured RuntimeClass: ${runtimeClass.name} (${runtimeClass.source === 'APP_OVERRIDE' ? 'app override' : 'server default'}).`);
+        }
 
         dlog(deploymentId, `Shutting down FileBrowsers (if active)`);
         for (let volume of app.appVolumes) {
@@ -140,12 +152,6 @@ class DeploymentService {
         await networkPolicyService.reconcileNetworkPolicy(app);
         dlog(deploymentId, `Configured Network Policy.`);
 
-        const runtimeClass = await this.resolveRuntimeClassForApp(app);
-        if (runtimeClass.name) {
-            await runtimeClassService.assertRuntimeClassExists(runtimeClass.name);
-            dlog(deploymentId, `Configured RuntimeClass: ${runtimeClass.name} (${runtimeClass.source === 'APP_OVERRIDE' ? 'app override' : 'server default'}). This only verifies that the RuntimeClass object exists; node handler availability is controlled by cluster configuration.`);
-        }
-
         const existingDeployment = await this.getDeployment(app.projectId, app.id);
         const body: V1Deployment = {
             metadata: {
@@ -175,7 +181,7 @@ class DeploymentService {
                         containers: [
                             {
                                 name: app.id,
-                                image: !!buildJobName ? registryService.createContainerRegistryUrlForAppId(app.id) : app.containerImageSource as string,
+                                image: !!buildJobName ? registryService.createContainerRegistryUrlForAppId(app.id, buildJobName) : app.containerImageSource as string,
                                 imagePullPolicy: 'Always',
                                 ...(app.containerCommand ? { command: [app.containerCommand] } : {}),
                                 ...(app.containerArgs ? { args: JSON.parse(app.containerArgs) } : {}),
@@ -320,6 +326,7 @@ class DeploymentService {
         await configMapService.deleteUnusedConfigMaps(app);
         await pvcService.deleteUnusedPvcOfApp(app);
         await svcService.createOrUpdateServiceForApp(deploymentId, app);
+        await publicEndpointService.reconcileForApp(app);
         await secretService.delteUnusedSecrets(app);
         dlog(deploymentId, `Updating ingress...`);
         await ingressService.createOrUpdateIngressForApp(deploymentId, app);

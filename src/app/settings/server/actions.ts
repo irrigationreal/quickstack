@@ -71,7 +71,7 @@ export const saveRuntimeClassSettings = async (prevState: any, inputData: Runtim
     const defaultAppRuntimeClass = normalizeRuntimeClassName(validatedData.defaultAppRuntimeClass);
 
     if (defaultAppRuntimeClass) {
-      await runtimeClassService.assertRuntimeClassExists(defaultAppRuntimeClass);
+      await runtimeClassService.assertRuntimeClassHealthy(defaultAppRuntimeClass);
       await paramService.save({ name: ParamService.DEFAULT_APP_RUNTIME_CLASS, value: defaultAppRuntimeClass });
     } else {
       await paramService.deleteByNameIfExists(ParamService.DEFAULT_APP_RUNTIME_CLASS);
