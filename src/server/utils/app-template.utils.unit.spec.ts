@@ -143,7 +143,7 @@ describe('AppTemplateService', () => {
 
                 const databaseModel = AppTemplateUtils.getDatabaseModelFromApp(app);
 
-                expect(databaseModel.internalConnectionUrl).toBe(`redis://:pa%20ss%25word%5D%24@${KubeObjectNameUtils.toServiceName('redis-app-id')}:6379`);
+                expect(databaseModel.internalConnectionUrl).toBe(`redis://default:pa%20ss%25word%5D%24@${KubeObjectNameUtils.toServiceName('redis-app-id')}:6379`);
             });
 
             it('should throw ServiceException for unknown app type', () => {

@@ -159,7 +159,7 @@ export class AppTemplateUtils {
                 password,
                 port,
                 hostname,
-                internalConnectionUrl: password ? `redis://:${encodeURIComponent(password)}@${hostname}:${port}` : `redis://${hostname}:${port}`,
+                internalConnectionUrl: password ? `redis://default:${encodeURIComponent(password)}@${hostname}:${port}` : `redis://${hostname}:${port}`,
             };
         } else {
             throw new ServiceException('Unknown database type, could not load database information.');
