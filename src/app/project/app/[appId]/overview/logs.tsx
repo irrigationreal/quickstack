@@ -13,7 +13,7 @@ import { Download, Expand, Terminal } from "lucide-react";
 import { TerminalDialog } from "./terminal-overlay";
 import { LogsDownloadOverlay } from "./logs-download-overlay";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { RolePermissionEnum } from "@/shared/model/role-extended.model.ts";
+import { RolePermissionEnum } from "@/shared/model/role-extended.model";
 import { usePodsStatus } from "@/frontend/states/zustand.states";
 
 export default function Logs({

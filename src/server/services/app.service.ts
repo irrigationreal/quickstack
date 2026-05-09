@@ -1,7 +1,7 @@
 import { revalidateTag, unstable_cache } from "next/cache";
 import dataAccess from "../adapter/db.client";
 import { Tags } from "../utils/cache-tag-generator.utils";
-import { App, AppBasicAuth, AppDomain, AppFileMount, AppNodePort, AppPort, AppVolume, Prisma } from "@prisma/client";
+import { App, AppBasicAuth, AppDomain, AppFileMount, AppNodePort, AppPort, AppPublicEndpoint, AppVolume, Prisma } from "@prisma/client";
 import { AppExtendedModel, AppWithProjectModel } from "@/shared/model/app-extended.model";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
@@ -15,7 +15,7 @@ import crypto from "crypto";
 import networkPolicyService from "./network-policy.service";
 import auditService, { AuditActor } from "./audit.service";
 import securityQuotaService from "./security-quota.service";
-import { AppBasicAuthModel, AppDomainModel, AppFileMountModel, AppModel, AppNodePortModel, AppPortModel, AppVolumeModel } from "@/shared/model/generated-zod";
+import { AppBasicAuthModel, AppDomainModel, AppFileMountModel, AppModel, AppNodePortModel, AppPortModel, AppPublicEndpointModel, AppVolumeModel } from "@/shared/model/generated-zod";
 import { z } from "zod";
 
 class AppService {
@@ -25,7 +25,7 @@ class AppService {
         actorEmail: "system:unknown-deploy-trigger",
     }) {
         const deploymentId = crypto.randomUUID();
-        const app = await this.getExtendedById(appId);
+        const app = await this.getExtendedById(appId, false);
         const baseAuditEvent = {
             ...actor,
             action: "APP_DEPLOY_REQUESTED",
@@ -97,7 +97,7 @@ class AppService {
 -----------------------------------------------`, false);
 
                 let gitCommitHash: string | undefined;
-                if (app.sourceType === 'GIT' || app.sourceType === 'GIT_SSH') {
+                if (app.sourceType === 'GIT' || app.sourceType === 'GIT_SSH' || app.sourceType === 'QUICKDEPLOY_UPLOAD') {
                     // first make build
                     const [buildJobName, buildGitCommitHash, gitCommitMessage, shouldDeployImmediately] = await buildService.buildApp(deploymentId, app, forceBuild);
                     gitCommitHash = buildGitCommitHash;
@@ -202,6 +202,7 @@ class AppService {
             appVolumes: true,
             appPorts: true,
             appNodePorts: true,
+            appPublicEndpoints: true,
             appFileMounts: true,
             appBasicAuths: true,
             appSecretEnvVars: true
@@ -346,6 +347,14 @@ class AppService {
         for (const nodePort of parsedNodePorts) {
             await this.saveNodePort({
                 ...nodePort,
+                appId: app.id
+            }, tx);
+        }
+
+        const parsedPublicEndpoints = AppPublicEndpointModel.merge(optionalParam).array().parse(app.appPublicEndpoints ?? []);
+        for (const publicEndpoint of parsedPublicEndpoints) {
+            await this.savePublicEndpoint({
+                ...publicEndpoint,
                 appId: app.id
             }, tx);
         }
@@ -802,6 +811,67 @@ class AppService {
         });
     }
 
+    async savePublicEndpoint(publicEndpointToBeSaved: Prisma.AppPublicEndpointUncheckedCreateInput | Prisma.AppPublicEndpointUncheckedUpdateInput, tx?: Prisma.TransactionClient) {
+        const client = tx || dataAccess.client;
+        const existingApp = await this.getExtendedById(publicEndpointToBeSaved.appId as string, false, client);
+
+        const publicIp = publicEndpointToBeSaved.publicIp as string;
+        const publicPort = publicEndpointToBeSaved.publicPort as number;
+        const protocol = (publicEndpointToBeSaved.protocol as string | undefined) ?? 'TCP';
+        if (protocol !== 'TCP') {
+            throw new ServiceException('Public endpoints currently support TCP only. UDP support will be enabled after live gateway validation.');
+        }
+
+        const existingWithSameEndpoint = await client.appPublicEndpoint.findFirst({
+            where: {
+                publicIp,
+                publicPort,
+                protocol,
+                NOT: { id: publicEndpointToBeSaved.id as string | undefined },
+            },
+            include: { app: true },
+        });
+        if (existingWithSameEndpoint) {
+            throw new ServiceException(`Public endpoint ${publicIp}:${publicPort}/${protocol} is already reserved by app ${existingWithSameEndpoint.app.name}.`);
+        }
+
+        const existingSystemReservation = await client.publicEndpointReservation.findFirst({
+            where: {
+                publicIp,
+                publicPort,
+                protocol,
+                NOT: { ownerId: publicEndpointToBeSaved.appId as string },
+            },
+        });
+        if (existingSystemReservation) {
+            throw new ServiceException(`Public endpoint ${publicIp}:${publicPort}/${protocol} is reserved for ${existingSystemReservation.name ?? existingSystemReservation.ownerType}.`);
+        }
+
+        let savedItem: AppPublicEndpoint;
+        try {
+            if (publicEndpointToBeSaved.id) {
+                savedItem = await client.appPublicEndpoint.update({
+                    where: { id: publicEndpointToBeSaved.id as string },
+                    data: publicEndpointToBeSaved,
+                });
+            } else {
+                savedItem = await client.appPublicEndpoint.create({
+                    data: publicEndpointToBeSaved as Prisma.AppPublicEndpointUncheckedCreateInput,
+                });
+            }
+        } finally {
+            revalidateTag(Tags.apps(existingApp.projectId as string));
+            revalidateTag(Tags.app(existingApp.id as string));
+        }
+        return savedItem;
+    }
+
+    async getPublicEndpointById(id: string) {
+        return await dataAccess.client.appPublicEndpoint.findFirstOrThrow({
+            where: { id },
+        });
+    }
+
     async deleteNodePortById(id: string) {
         const existing = await dataAccess.client.appNodePort.findFirst({
             where: { id },
@@ -812,6 +882,24 @@ class AppService {
         }
         try {
             await dataAccess.client.appNodePort.delete({
+                where: { id },
+            });
+        } finally {
+            revalidateTag(Tags.app(existing.appId));
+            revalidateTag(Tags.apps(existing.app.projectId));
+        }
+    }
+
+    async deletePublicEndpointById(id: string) {
+        const existing = await dataAccess.client.appPublicEndpoint.findFirst({
+            where: { id },
+            include: { app: true },
+        });
+        if (!existing) {
+            return;
+        }
+        try {
+            await dataAccess.client.appPublicEndpoint.delete({
                 where: { id },
             });
         } finally {

@@ -1,6 +1,6 @@
 import { RoleAppPermission } from "@prisma/client";
 import { Session } from "next-auth";
-import { RolePermissionEnum } from "./role-extended.model.ts";
+import { RolePermissionEnum } from "./role-extended.model";
 
 export interface UserSession {
     id: string;

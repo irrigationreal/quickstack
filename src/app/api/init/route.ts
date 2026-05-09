@@ -24,5 +24,5 @@ export async function GET(request: Request) {
 
         console.log('Initialized services successfully via init route for instanceId:', instanceId);
         return NextResponse.json({ status: "ok" });
-    });
+    }, { errorStatus: 500 });
 }

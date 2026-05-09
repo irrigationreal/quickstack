@@ -28,7 +28,7 @@ import auditService from './audit.service';
 describe('audit.service', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        process.env.NODE_ENV = 'test';
+        vi.stubEnv('NODE_ENV', 'test');
         createAuditEvent.mockResolvedValue({ id: 'audit-1' });
     });
 

@@ -9,7 +9,7 @@ import { authOptions } from "@/server/utils/auth-options";
 import { NextResponse } from "next/server";
 import userGroupService from "../services/user-group.service";
 import dataAccess from "../adapter/db.client";
-import { RolePermissionEnum } from "@/shared/model/role-extended.model.ts";
+import { RolePermissionEnum } from "@/shared/model/role-extended.model";
 import { UserGroupUtils } from "../../shared/utils/role.utils";
 
 /**
@@ -241,27 +241,29 @@ export async function fileUploadAction<ReturnType>(
 
 
 export async function simpleRoute<ReturnType>(
-    func: () => Promise<ReturnType>) {
+    func: () => Promise<ReturnType>,
+    options: { errorStatus?: number } = {}) {
     let funcResult: ReturnType;
     try {
         funcResult = await func();
     } catch (ex) {
+        const responseInit = options.errorStatus ? { status: options.errorStatus } : undefined;
         if (ex instanceof FormValidationException) {
             return NextResponse.json({
                 status: 'error',
                 message: ex.message
-            });
+            }, responseInit);
         } else if (ex instanceof ServiceException) {
             return NextResponse.json({
                 status: 'error',
                 message: ex.message
-            });
+            }, responseInit);
         } else {
             console.error(ex)
             return NextResponse.json({
                 status: 'error',
                 message: 'An unknown error occurred.'
-            });
+            }, responseInit);
         }
     }
     return funcResult;

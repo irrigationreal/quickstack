@@ -12,7 +12,7 @@ import { DeploymentInfoModel } from "@/shared/model/deployment-info.model";
 import DeploymentStatusBadge from "./deployment-status-badge";
 import { BuildLogsDialog } from "./build-logs-overlay";
 import ShortCommitHash from "@/components/custom/short-commit-hash";
-import { RolePermissionEnum } from "@/shared/model/role-extended.model.ts";
+import { RolePermissionEnum } from "@/shared/model/role-extended.model";
 
 export default function BuildsTab({
     app,

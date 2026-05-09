@@ -51,6 +51,7 @@ function createApp(overrides: Partial<AppExtendedModel> = {}): AppExtendedModel 
         appDomains: [],
         appPorts: [],
         appNodePorts: [],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],

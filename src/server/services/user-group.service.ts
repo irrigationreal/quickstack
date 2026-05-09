@@ -4,7 +4,7 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import { Tags } from "../utils/cache-tag-generator.utils";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { RoleEditModel } from "@/shared/model/role-edit.model";
-import { adminRoleName } from "@/shared/model/role-extended.model.ts";
+import { adminRoleName } from "@/shared/model/role-extended.model";
 import { UserGroupExtended } from "@/shared/model/sim-session.model";
 
 export class UserGroupService {
@@ -253,45 +253,39 @@ export class UserGroupService {
     }
 
     async createDefaultRolesIfNotExists() {
-        try {
-            const dbAdminRole = await dataAccess.client.userGroup.findFirst({
+        const dbAdminRole = await dataAccess.client.userGroup.findFirst({
+            where: {
+                name: {
+                    in: [adminRoleName]
+                }
+            },
+            include: {
+                users: true
+            }
+        });
+        if (!dbAdminRole) {
+            console.warn("*** No admin users found. Creating default admin role ***");
+            const adminRole = await this.getOrCreateAdminRole();
+            await dataAccess.client.user.updateMany({
                 where: {
-                    name: {
-                        in: [adminRoleName]
-                    }
+                    userGroupId: null
                 },
-                include: {
-                    users: true
+                data: {
+                    userGroupId: adminRole.id
                 }
             });
-            if (!dbAdminRole) {
-                console.warn("*** No admin users found. Creating default admin role ***");
-                const adminRole = await this.getOrCreateAdminRole();
-                await dataAccess.client.user.updateMany({
-                    where: {
-                        userGroupId: null
-                    },
-                    data: {
-                        userGroupId: adminRole.id
-                    }
-                });
-                return;
-            }
+            return;
+        }
 
-            if (dbAdminRole.users.length === 0) {
-                // making all users to admins
-                console.warn("*** No admin users found. Assigning all users to admin role ***");
-                const adminRole = await this.getOrCreateAdminRole();
-                await dataAccess.client.user.updateMany({
-                    data: {
-                        userGroupId: adminRole.id
-                    }
-                });
-                return;
-            }
-        } finally {
-            revalidateTag(Tags.userGroups());
-            revalidateTag(Tags.users());
+        if (dbAdminRole.users.length === 0) {
+            // making all users to admins
+            console.warn("*** No admin users found. Assigning all users to admin role ***");
+            const adminRole = await this.getOrCreateAdminRole();
+            await dataAccess.client.user.updateMany({
+                data: {
+                    userGroupId: adminRole.id
+                }
+            });
         }
     }
 }

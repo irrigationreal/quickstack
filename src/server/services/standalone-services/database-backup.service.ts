@@ -22,6 +22,7 @@ class DatabaseBackupService {
                                 appDomains: true,
                                 appPorts: true,
                                 appNodePorts: true,
+                                appPublicEndpoints: true,
                                 appBasicAuths: true,
                                 appSecretEnvVars: true,
                                 appVolumes: true,

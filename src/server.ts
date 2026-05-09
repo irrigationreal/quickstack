@@ -1,7 +1,13 @@
 import { createServer } from 'http'
 import { parse } from 'url'
-import next from 'next'
+import { AsyncLocalStorage } from 'async_hooks'
 import { randomUUID } from 'crypto'
+
+if (!(globalThis as any).AsyncLocalStorage) {
+    (globalThis as any).AsyncLocalStorage = AsyncLocalStorage;
+}
+
+const next = require('next') as typeof import('next').default
 import socketIoServer from './socket-io.server'
 import quickStackService from './server/services/qs.service'
 import { CommandExecutorUtils } from './server/utils/command-executor.utils'
@@ -12,6 +18,10 @@ import backupService from './server/services/standalone-services/backup.service'
 import maintenanceService from './server/services/standalone-services/maintenance.service'
 import passwordChangeService from './server/services/standalone-services/password-change.service'
 import appLogsService from './server/services/standalone-services/app-logs.service'
+import buildWatchService from './server/services/standalone-services/build-watch.service'
+import buildPodLogWatchService from './server/services/standalone-services/build-pod-log-watch.service'
+import deploymentEventWatchService from './server/services/standalone-services/deployment-event-watch.service'
+import { ParamService } from './server/services/param.service'
 
 declare global {
     var quickStackInitKey: string | undefined;
@@ -82,9 +92,18 @@ async function initializeNextJs() {
                 `> Server listening at http://localhost:${port} as ${dev ? 'development' : process.env.NODE_ENV
                 }`
             );
-            // Trigger watch services via the protected init route
-            fetch(`http://localhost:${port}/api/init?key=${globalThis.quickStackInitKey}`)
-                .catch((err) => console.error('Failed to call init route:', err));
+            Promise.all([
+                buildWatchService.startWatch(),
+                buildPodLogWatchService.startWatch(),
+                deploymentEventWatchService.startWatch(),
+                dataAccess.client.parameter.upsert({
+                    where: { name: ParamService.QS_INSTANCE_ID },
+                    create: { name: ParamService.QS_INSTANCE_ID, value: randomUUID() },
+                    update: {},
+                }),
+            ]).then(([, , , instanceId]) => {
+                console.log('Initialized services successfully for instanceId:', instanceId.value);
+            }).catch((err) => console.error('Failed to initialize watch services; background watch functionality may be unavailable:', err));
         });
     }).catch((err) => console.error(
         'Failed to initialize watch services via init route; background watch functionality may be unavailable:',

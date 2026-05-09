@@ -1,6 +1,7 @@
 import * as k8s from '@kubernetes/client-node';
 import { K3sContainer, StartedK3sContainer } from '@testcontainers/k3s';
 import { beforeAll, afterAll } from 'vitest';
+import { withLegacyKubernetesResponses } from '@/server/utils/kubernetes-client-compat.utils';
 
 /**
  * Matches the prod k3s version used by QuickStack (setup/k3s-versions.json).
@@ -10,12 +11,12 @@ const DEFAULT_IMAGE = 'rancher/k3s:v1.31.3-k3s1';
 const K3S_HOOK_TIMEOUT_MS = 60_000; // because pulling and starting the container can take longer the first time
 
 export interface K3sTestClients {
-    core: k8s.CoreV1Api;
-    apps: k8s.AppsV1Api;
-    batch: k8s.BatchV1Api;
+    core: any;
+    apps: any;
+    batch: any;
     log: k8s.Log;
-    network: k8s.NetworkingV1Api;
-    customObjects: k8s.CustomObjectsApi;
+    network: any;
+    customObjects: any;
     metrics: k8s.Metrics;
 }
 
@@ -135,12 +136,12 @@ export function createK3sTestContext(image = DEFAULT_IMAGE) {
     function getClients(): K3sTestClients {
         const kc = getKubeConfig();
         return {
-            core: kc.makeApiClient(k8s.CoreV1Api),
-            apps: kc.makeApiClient(k8s.AppsV1Api),
-            batch: kc.makeApiClient(k8s.BatchV1Api),
+            core: withLegacyKubernetesResponses(kc.makeApiClient(k8s.CoreV1Api)),
+            apps: withLegacyKubernetesResponses(kc.makeApiClient(k8s.AppsV1Api)),
+            batch: withLegacyKubernetesResponses(kc.makeApiClient(k8s.BatchV1Api)),
             log: new k8s.Log(kc),
-            network: kc.makeApiClient(k8s.NetworkingV1Api),
-            customObjects: kc.makeApiClient(k8s.CustomObjectsApi),
+            network: withLegacyKubernetesResponses(kc.makeApiClient(k8s.NetworkingV1Api)),
+            customObjects: withLegacyKubernetesResponses(kc.makeApiClient(k8s.CustomObjectsApi)),
             metrics: new k8s.Metrics(kc),
         };
     }

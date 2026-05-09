@@ -14,8 +14,8 @@ describe('Toast', () => {
             const action = vi.fn().mockResolvedValue({ status: 'success', message: 'Success' } as ServerActionResult<any, any>);
             const defaultSuccessMessage = 'Operation successful';
 
-            vi.mocked(toast.promise).mockImplementation(async (actionFn, { success }: any) => {
-                const result = await (actionFn as () => Promise<unknown>)();
+            (toast.promise as any).mockImplementation(async (actionFn: () => Promise<unknown>, { success }: any) => {
+                const result = await actionFn();
                 return success(result);
             });
 
@@ -28,9 +28,9 @@ describe('Toast', () => {
         it('should reject with error message when action fails', async () => {
             const action = vi.fn().mockResolvedValue({ status: 'error', message: 'Failure' } as ServerActionResult<any, any>);
 
-            vi.mocked(toast.promise).mockImplementation(async (actionFn, { error }: any) => {
+            (toast.promise as any).mockImplementation(async (actionFn: () => Promise<unknown>, { error }: any) => {
                 try {
-                    await (actionFn as () => Promise<unknown>)();
+                    await actionFn();
                 } catch (err) {
                     return error(err);
                 }
@@ -43,9 +43,9 @@ describe('Toast', () => {
         it('should reject with unknown error message when action throws an error', async () => {
             const action = vi.fn().mockRejectedValue(new Error('Some error'));
 
-            vi.mocked(toast.promise).mockImplementation(async (actionFn, { error }: any) => {
+            (toast.promise as any).mockImplementation(async (actionFn: () => Promise<unknown>, { error }: any) => {
                 try {
-                    await (actionFn as () => Promise<unknown>)();
+                    await actionFn();
                 } catch (err) {
                     return error(err);
                 }
@@ -59,8 +59,8 @@ describe('Toast', () => {
             const action = vi.fn().mockResolvedValue({ status: 'success' } as ServerActionResult<any, any>);
             const defaultSuccessMessage = 'Operation successful';
 
-            vi.mocked(toast.promise).mockImplementation(async (actionFn, { success }: any) => {
-                const result = await (actionFn as () => Promise<unknown>)();
+            (toast.promise as any).mockImplementation(async (actionFn: () => Promise<unknown>, { success }: any) => {
+                const result = await actionFn();
                 return success(result);
             });
 

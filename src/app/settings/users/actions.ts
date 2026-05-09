@@ -7,7 +7,7 @@ import userService from "@/server/services/user.service";
 import { UserEditModel, userEditZodModel } from "@/shared/model/user-edit.model";
 import userGroupService from "@/server/services/user-group.service";
 import { RoleEditModel, roleEditZodModel } from "@/shared/model/role-edit.model";
-import { adminRoleName } from "@/shared/model/role-extended.model.ts";
+import { adminRoleName } from "@/shared/model/role-extended.model";
 import auditService, { auditActorFromSession } from "@/server/services/audit.service";
 
 export const saveUser = async (prevState: any, inputData: UserEditModel) =>

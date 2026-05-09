@@ -79,6 +79,35 @@ describe('app.service', () => {
         }));
     });
 
+    it('rejects duplicate public endpoint reservations before save', async () => {
+        vi.spyOn(appService, 'getExtendedById').mockResolvedValue(createApp({ name: 'Owner App' }));
+        vi.mocked(dataAccess.client as any).appPublicEndpoint = {
+            findFirst: vi.fn().mockResolvedValue({
+                id: 'existing-endpoint',
+                appId: 'other-app',
+                publicIp: '65.21.9.20',
+                publicPort: 18080,
+                protocol: 'TCP',
+                app: { name: 'Existing App' },
+            }),
+            create: vi.fn(),
+        };
+        vi.mocked(dataAccess.client as any).publicEndpointReservation = {
+            findFirst: vi.fn(),
+        };
+
+        await expect(appService.savePublicEndpoint({
+            appId: 'demo-app',
+            publicIp: '65.21.9.20',
+            publicPort: 18080,
+            targetPort: 8000,
+            protocol: 'TCP',
+            enabled: true,
+        })).rejects.toThrow('Public endpoint 65.21.9.20:18080/TCP is already reserved by app Existing App.');
+
+        expect(vi.mocked(dataAccess.client as any).appPublicEndpoint.create).not.toHaveBeenCalled();
+    });
+
     it('persists App Node Ports when saving an extended App', async () => {
         vi.spyOn(appService, 'save').mockResolvedValue({} as never);
         vi.spyOn(appService, 'saveDomain').mockResolvedValue({} as never);
@@ -165,6 +194,7 @@ function createApp(overrides: Partial<AppExtendedModel>): AppExtendedModel {
         appDomains: [],
         appPorts: [],
         appNodePorts: [],
+        appPublicEndpoints: [],
         appVolumes: [],
         appFileMounts: [],
         appBasicAuths: [],
