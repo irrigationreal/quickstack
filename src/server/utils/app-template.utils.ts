@@ -123,13 +123,16 @@ export class AppTemplateUtils {
                 internalConnectionUrl: `mysql://${envVars.find(x => x.name === 'MYSQL_USER')?.value!}:${envVars.find(x => x.name === 'MYSQL_PASSWORD')?.value!}@${hostname}:${port}/${envVars.find(x => x.name === 'MYSQL_DATABASE')?.value!}`,
             };
         } else if (app.appType === 'POSTGRES') {
+            const databaseName = envVars.find(x => x.name === 'POSTGRES_DB')?.value!;
+            const username = envVars.find(x => x.name === 'POSTGRES_USER')?.value!;
+            const password = envVars.find(x => x.name === 'POSTGRES_PASSWORD')?.value!;
             returnVal = {
-                databaseName: envVars.find(x => x.name === 'POSTGRES_DB')?.value!,
-                username: envVars.find(x => x.name === 'POSTGRES_USER')?.value!,
-                password: envVars.find(x => x.name === 'POSTGRES_PASSWORD')?.value!,
+                databaseName,
+                username,
+                password,
                 port,
                 hostname,
-                internalConnectionUrl: `postgresql://${envVars.find(x => x.name === 'POSTGRES_USER')?.value!}:${envVars.find(x => x.name === 'POSTGRES_PASSWORD')?.value!}@${hostname}:${port}/${envVars.find(x => x.name === 'POSTGRES_DB')?.value!}`,
+                internalConnectionUrl: `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${hostname}:${port}/${encodeURIComponent(databaseName)}`,
             };
         } else if (app.appType === 'MARIADB') {
             returnVal = {

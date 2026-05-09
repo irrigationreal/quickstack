@@ -723,10 +723,18 @@ async function commandPostgres() {
     const result = api('postgres', [JSON.stringify(payload)]);
     emit('success', {
       message: result.attached
-        ? `Created Postgres ${result.databaseAppId} and attached it as ${result.attached.secretName}.`
-        : `Created Postgres ${result.databaseAppId}.`,
+        ? `Created Postgres ${result.databaseAppId}, deployed it, and attached it as ${result.attached.secretName}.`
+        : `Created and deployed Postgres ${result.databaseAppId}.`,
       result,
     });
+    return;
+  }
+  if (sub === 'list') {
+    const projectId = optionValue('--project');
+    if (!projectId) die('Usage: quickstack postgres list --project <projectId>');
+    await ensureCredentialsForApi();
+    const result = api('postgres-list', [projectId]);
+    emit('success', { message: `Fetched ${result.databases?.length || 0} managed Postgres database(s).`, result });
     return;
   }
   if (sub === 'attach') {
@@ -738,7 +746,15 @@ async function commandPostgres() {
     emit('success', { message: `Attached Postgres ${databaseAppId} to ${appId} as ${result.secretName}.`, result });
     return;
   }
-  die('Usage: quickstack postgres <create|attach> ...');
+  if (sub === 'destroy') {
+    const databaseAppId = commandArgs[1] || optionValue('--database-app');
+    if (!databaseAppId) die('Usage: quickstack postgres destroy <databaseAppId>');
+    await ensureCredentialsForApi();
+    const result = api('postgres-destroy', [JSON.stringify({ databaseAppId })]);
+    emit('success', { message: `Destroyed managed Postgres ${databaseAppId}.`, result });
+    return;
+  }
+  die('Usage: quickstack postgres <create|list|attach|destroy> ...');
 }
 
 async function commandConfig() {
@@ -898,9 +914,11 @@ Usage:
   quickstack scale [appId|path] --replicas <count> [--json]
   quickstack rollback [appId|path] [--json]
   quickstack postgres create --project <id> [--attach <appId>]
+  quickstack postgres list --project <id>
   quickstack postgres attach <databaseAppId> --app <appId>
+  quickstack postgres destroy <databaseAppId>
   quickstack config <show|validate>
-  quickstack api <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|postgres> ...
+  quickstack api <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|postgres|postgres-list|postgres-destroy> ...
 
 Reserved first-class verbs:
   rollback, checks, restart, scale, domains,

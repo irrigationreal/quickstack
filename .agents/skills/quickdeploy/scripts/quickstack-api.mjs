@@ -179,7 +179,23 @@ async function main() {
     return;
   }
 
-  die('Usage: quickstack-api.mjs <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|endpoints-list|endpoints-reserve|endpoints-release|volumes-list|volumes-add|volumes-remove|exec|postgres> ...');
+  if (command === 'postgres-list') {
+    const projectId = process.argv[3];
+    if (!projectId) die('Usage: quickstack-api.mjs postgres-list <projectId>');
+    console.log(JSON.stringify(await request(`/api/v1/agent/managed/postgres?projectId=${encodeURIComponent(projectId)}`), null, 2));
+    return;
+  }
+
+  if (command === 'postgres-destroy') {
+    const payload = parseJsonArg(3, 'postgres destroy payload');
+    console.log(JSON.stringify(await request('/api/v1/agent/managed/postgres', {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    }), null, 2));
+    return;
+  }
+
+  die('Usage: quickstack-api.mjs <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|endpoints-list|endpoints-reserve|endpoints-release|volumes-list|volumes-add|volumes-remove|exec|postgres|postgres-list|postgres-destroy> ...');
 }
 
 main().catch(error => die(error instanceof Error ? error.message : String(error)));

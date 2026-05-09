@@ -3,7 +3,6 @@ import appSecretEnvService from "./app-secret-env.service";
 import auditService, { AuditActor } from "./audit.service";
 import { AppTemplateUtils } from "../utils/app-template.utils";
 import { getPostgresAppTemplate } from "@/shared/templates/databases/postgres.template";
-import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { Prisma } from "@prisma/client";
 import dataAccess from "../adapter/db.client";
@@ -28,8 +27,8 @@ class QuickStackManagedService {
         const appId = await dataAccess.client.$transaction(async (tx: Prisma.TransactionClient) => {
             const created = await appService.save({
                 ...mappedApp,
+                name: input.name || mappedApp.name,
                 projectId: input.projectId,
-                id: KubeObjectNameUtils.toAppId(input.name || 'postgres'),
             }, false, tx);
             for (const volume of template.appVolumes) {
                 await appService.saveVolume({ ...volume, appId: created.id }, tx);
@@ -58,6 +57,67 @@ class QuickStackManagedService {
             },
         });
         return { databaseApp, databaseInfo };
+    }
+
+    async listPostgres(projectId: string) {
+        const rows = await dataAccess.client.app.findMany({
+            where: {
+                projectId,
+                appType: 'POSTGRES',
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                name: true,
+                projectId: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+
+        const databases = [];
+        for (const row of rows) {
+            const app = await appService.getExtendedById(row.id, false);
+            const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(app);
+            databases.push({
+                id: row.id,
+                name: row.name,
+                projectId: row.projectId,
+                databaseName: databaseInfo.databaseName,
+                username: databaseInfo.username,
+                hostname: databaseInfo.hostname,
+                port: databaseInfo.port,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+            });
+        }
+        return databases;
+    }
+
+    async destroyPostgres(input: {
+        databaseAppId: string;
+        actor: AuditActor;
+    }) {
+        const databaseApp = await appService.getById(input.databaseAppId);
+        if (databaseApp.appType !== 'POSTGRES') {
+            throw new ServiceException('Managed resource is not a Postgres app.');
+        }
+        await appService.deleteById(databaseApp.id);
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_POSTGRES_DESTROYED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: databaseApp.id,
+            projectId: databaseApp.projectId,
+            appId: databaseApp.id,
+            appName: databaseApp.name,
+        });
+        return {
+            databaseAppId: databaseApp.id,
+            projectId: databaseApp.projectId,
+            name: databaseApp.name,
+        };
     }
 
     async attachPostgres(input: {

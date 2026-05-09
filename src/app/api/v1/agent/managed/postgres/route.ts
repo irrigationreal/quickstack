@@ -25,6 +25,14 @@ const attachPostgresZodModel = z.object({
     secretName: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).default('DATABASE_URL'),
 });
 
+const listPostgresZodModel = z.object({
+    projectId: z.string().min(1),
+});
+
+const destroyPostgresZodModel = z.object({
+    databaseAppId: z.string().min(1),
+});
+
 function unauthorized() {
     return NextResponse.json({ status: 'error', message: 'Missing or invalid API key.' }, { status: 401 });
 }
@@ -33,10 +41,38 @@ function forbidden(message = 'API key is not authorized to manage this resource.
     return NextResponse.json({ status: 'error', message }, { status: 403 });
 }
 
+async function authenticate(request: Request) {
+    return await apiKeyService.authenticateAuthorizationHeader(request.headers.get('authorization'));
+}
+
+export async function GET(request: Request) {
+    let authenticated;
+    try {
+        authenticated = await authenticate(request);
+    } catch {
+        return unauthorized();
+    }
+    if (!apiKeyService.hasScope(authenticated.apiKey, 'apps:read')) {
+        return forbidden('API key does not have app read permission.');
+    }
+
+    const requestUrl = new URL(request.url);
+    const parsed = listPostgresZodModel.safeParse({ projectId: requestUrl.searchParams.get('projectId') });
+    if (!parsed.success) {
+        return NextResponse.json({ status: 'error', message: 'projectId is required.' }, { status: 400 });
+    }
+    if (!apiKeyService.isAllowedForApp(authenticated.apiKey, { id: '', projectId: parsed.data.projectId })) {
+        return forbidden();
+    }
+
+    const databases = await quickStackManagedService.listPostgres(parsed.data.projectId);
+    return NextResponse.json({ status: 'success', projectId: parsed.data.projectId, databases });
+}
+
 export async function POST(request: Request) {
     let authenticated;
     try {
-        authenticated = await apiKeyService.authenticateAuthorizationHeader(request.headers.get('authorization'));
+        authenticated = await authenticate(request);
     } catch {
         return unauthorized();
     }
@@ -98,6 +134,7 @@ export async function POST(request: Request) {
             username: input.username,
             actor: authenticated.auditActor,
         });
+        await appService.buildAndDeploy(created.databaseApp.id, false, authenticated.auditActor);
         const attached = input.attachAppId ? await quickStackManagedService.attachPostgres({
             databaseAppId: created.databaseApp.id,
             appId: input.attachAppId,
@@ -127,6 +164,53 @@ export async function POST(request: Request) {
         });
         if (error instanceof z.ZodError || error instanceof ServiceException) {
             return NextResponse.json({ status: 'error', message: error instanceof ServiceException ? error.message : 'Invalid managed Postgres payload.' }, { status: 400 });
+        }
+        throw error;
+    }
+}
+
+export async function DELETE(request: Request) {
+    let authenticated;
+    try {
+        authenticated = await authenticate(request);
+    } catch {
+        return unauthorized();
+    }
+    if (!apiKeyService.hasScope(authenticated.apiKey, 'apps:write')) {
+        return forbidden('API key does not have app configuration permission.');
+    }
+
+    const parsed = destroyPostgresZodModel.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+        return NextResponse.json({ status: 'error', message: 'Invalid managed Postgres destroy payload.' }, { status: 400 });
+    }
+
+    try {
+        const databaseApp = await appService.getById(parsed.data.databaseAppId);
+        if (!apiKeyService.isAllowedForApp(authenticated.apiKey, databaseApp)) {
+            return forbidden();
+        }
+        try {
+            assertSessionCanWriteApp(authenticated.session, databaseApp.id);
+        } catch {
+            return forbidden();
+        }
+        const destroyed = await quickStackManagedService.destroyPostgres({
+            databaseAppId: parsed.data.databaseAppId,
+            actor: authenticated.auditActor,
+        });
+        return NextResponse.json({ status: 'success', destroyed });
+    } catch (error) {
+        await auditService.recordBestEffort({
+            ...authenticated.auditActor,
+            action: 'MANAGED_POSTGRES_DESTROY_REQUESTED',
+            outcome: 'FAILED',
+            targetType: 'APP',
+            targetId: parsed.data.databaseAppId,
+            message: error instanceof Error ? error.message : 'Managed Postgres destroy failed.',
+        });
+        if (error instanceof ServiceException) {
+            return NextResponse.json({ status: 'error', message: error.message }, { status: 400 });
         }
         throw error;
     }

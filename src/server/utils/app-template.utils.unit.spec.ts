@@ -119,6 +119,19 @@ describe('AppTemplateService', () => {
                 expect(databaseModel.hostname).toBe(KubeObjectNameUtils.toServiceName('app-id'));
             });
 
+            it('should URL-encode Postgres credentials in the internal connection URL', () => {
+                const app: AppExtendedModel = {
+                    appType: 'POSTGRES',
+                    envVars: 'POSTGRES_DB=smoke db\nPOSTGRES_USER=smoke user\nPOSTGRES_PASSWORD=5Xk5%%pXXR!vVW1OU]9TNLD-TZS9$O-47aA\n',
+                    appPorts: [{ port: 5432 }],
+                    id: 'pg-app-id'
+                } as AppExtendedModel;
+
+                const databaseModel = AppTemplateUtils.getDatabaseModelFromApp(app);
+
+                expect(databaseModel.internalConnectionUrl).toBe(`postgresql://smoke%20user:5Xk5%25%25pXXR!vVW1OU%5D9TNLD-TZS9%24O-47aA@${KubeObjectNameUtils.toServiceName('pg-app-id')}:5432/smoke%20db`);
+            });
+
             it('should throw ServiceException for unknown app type', () => {
                 const app: AppExtendedModel = {
                     appType: 'UNKNOWN',
