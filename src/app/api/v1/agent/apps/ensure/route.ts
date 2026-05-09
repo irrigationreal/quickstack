@@ -66,36 +66,44 @@ export async function POST(request: Request) {
         }
     }
 
+    const isManagedSource = input.mode !== 'image';
     const savedApp = await appService.save({
         ...(existingApp ? { id: existingApp.id } : {}),
         name: input.name,
         projectId: input.projectId,
         appType: 'APP',
-        sourceType: 'CONTAINER',
+        sourceType: isManagedSource ? 'QUICKDEPLOY_UPLOAD' : 'CONTAINER',
+        buildMethod: input.mode === 'dockerfile' ? 'DOCKERFILE' : existingApp?.buildMethod ?? 'RAILPACK',
+        dockerfilePath: input.mode === 'dockerfile' ? './Dockerfile' : existingApp?.dockerfilePath ?? './Dockerfile',
         containerImageSource: input.image,
-        containerRegistryUsername: input.registryUsername ?? existingApp?.containerRegistryUsername ?? null,
-        containerRegistryPassword: input.registryPassword ?? existingApp?.containerRegistryPassword ?? null,
+        containerRegistryUsername: isManagedSource ? null : input.registryUsername ?? existingApp?.containerRegistryUsername ?? null,
+        containerRegistryPassword: isManagedSource ? null : input.registryPassword ?? existingApp?.containerRegistryPassword ?? null,
         replicas: existingApp?.replicas ?? 1,
         ingressNetworkPolicy: existingApp?.ingressNetworkPolicy ?? Constants.DEFAULT_INGRESS_NETWORK_POLICY_APPS,
         egressNetworkPolicy: existingApp?.egressNetworkPolicy ?? Constants.DEFAULT_EGRESS_NETWORK_POLICY_APPS,
         useNetworkPolicy: existingApp?.useNetworkPolicy ?? true,
     }, !existingApp);
 
-    await appService.savePort({
-        appId: savedApp.id,
-        port: input.port,
-    });
-
     const extendedApp = await appService.getExtendedById(savedApp.id);
-    const existingGeneratedDomain = extendedApp.appDomains.find(domain => domain.hostname.endsWith('.quickstack.me')) ?? extendedApp.appDomains[0];
-    const hostname = existingGeneratedDomain?.hostname ?? await agentDomainService.generateHostname(input.domainPrefix ?? input.name);
+    const existingPort = extendedApp.appPorts.find(port => port.port === input.port);
+    if (!existingPort) {
+        await appService.savePort({
+            appId: savedApp.id,
+            port: input.port,
+        });
+    }
+
+    const existingDomain = input.customHostname
+        ? extendedApp.appDomains.find(domain => domain.hostname === input.customHostname)
+        : extendedApp.appDomains[0];
+    const hostname = input.customHostname ?? existingDomain?.hostname ?? await agentDomainService.generateHostname(input.domainPrefix ?? input.name);
     await appService.saveDomain({
-        id: existingGeneratedDomain?.id,
+        id: existingDomain?.id,
         appId: savedApp.id,
         hostname,
         port: input.port,
         useSsl: true,
-        redirectHttps: true,
+        redirectHttps: !input.customHostname,
     });
 
     await auditService.recordBestEffort({
@@ -111,6 +119,7 @@ export async function POST(request: Request) {
             mode: input.mode,
             port: input.port,
             domainPrefix: input.domainPrefix,
+            customHostname: input.customHostname,
             hasRegistryCredentials: Boolean(input.registryUsername || input.registryPassword),
         },
     });

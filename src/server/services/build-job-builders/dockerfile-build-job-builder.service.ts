@@ -28,7 +28,7 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
             "--opt",
             `filename=${contextPaths.filePath}`,
             "--output",
-            `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id)},push=true,registry.insecure=true`
+            `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, ctx.buildName)},push=true,registry.insecure=true`
         ];
 
         return {

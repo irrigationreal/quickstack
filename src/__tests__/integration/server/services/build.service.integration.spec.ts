@@ -139,7 +139,7 @@ export async function deployRegistryForBuildIntegration() {
     }).toBe('Running');
 
     const registryDeployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE);
-    expect(registryDeployments.body.items.some((item) => item.metadata?.name === 'registry')).toBe(true);
+    expect(registryDeployments.body.items.some((item: any) => item.metadata?.name === 'registry')).toBe(true);
 }
 
 export async function runBuildAndAssert(input: BuildIntegrationInput) {
@@ -182,7 +182,7 @@ export async function runBuildAndAssert(input: BuildIntegrationInput) {
         [
             'sh',
             '-c',
-            `test -f /var/lib/registry/docker/registry/v2/repositories/${app.id}/_manifests/tags/latest/current/link`,
+            `test -f /var/lib/registry/docker/registry/v2/repositories/${app.id}/_manifests/tags/${buildJobName}/current/link`,
         ],
     );
 
@@ -213,7 +213,7 @@ export async function runBuildAndAssertGitFailure(input: BuildIntegrationInput) 
     const deploymentId = `dep-${suffix}`;
     await expect(deploymentLogService.catchErrosAndLog(deploymentId, async () => buildService.buildApp(deploymentId, app, true)))
         .rejects
-        .toThrow('Git: SSH host key verification failed.');
+        .toThrow('Git: SSH key is not configured for this app.');
 
     const builds = await buildService.getBuildsForApp(app.id);
     expect(builds).toHaveLength(0);
@@ -257,6 +257,7 @@ function createBuildApp(input: BuildIntegrationInput & { id: string; projectId: 
         appDomains: [],
         appPorts: [],
         appNodePorts: [],
+        appPublicEndpoints: [],
         appFileMounts: [],
         appVolumes: [],
         appBasicAuths: [],

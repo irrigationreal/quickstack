@@ -38,7 +38,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
     const [activeTab, setActiveTab] = useState<'custom' | 'quickstack'>('custom');
 
     useEffect(() => {
-        // Load the quickstack.me domain suffix when dialog opens
+        // Load the generated app domain suffix when dialog opens
         if (isOpen) {
             getQuickstackDomainSuffix().then((res) => {
                 if (res.status === 'success' && res.data) {
@@ -93,7 +93,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
         }
     }, [domain, form]);
 
-    // Extract the custom prefix from quickstack.me domain when editing
+    // Extract the generated-domain prefix when editing
     const getQuickstackPrefix = (hostname: string): string => {
         if (!hostname || !domainSuffix) return '';
         if (hostname.endsWith(`.${domainSuffix}`)) {
@@ -127,7 +127,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'custom' | 'quickstack')} className="w-full">
                                 <TabsList className="grid w-full grid-cols-2">
                                     <TabsTrigger value="custom">Custom Domain</TabsTrigger>
-                                    {!!domainSuffix && <TabsTrigger value="quickstack">quickstack.me Domain</TabsTrigger>}
+                                    {!!domainSuffix && <TabsTrigger value="quickstack">Generated Domain</TabsTrigger>}
                                 </TabsList>
 
                                 <TabsContent value="custom" className="space-y-4 mt-4">
@@ -192,7 +192,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                                                     </span>
                                                                 </TooltipTrigger>
                                                                 <TooltipContent>
-                                                                    <p>This ist the quickstack.me <br />domain for your instance.</p>
+                                                                    <p>This is the generated app domain <br />for your instance.</p>
                                                                 </TooltipContent>
                                                             </Tooltip>
                                                         </div>

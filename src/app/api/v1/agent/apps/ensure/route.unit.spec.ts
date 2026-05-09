@@ -51,11 +51,11 @@ describe('agent ensure app route', () => {
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
         appMocks.getById.mockResolvedValue(null);
         appMocks.save.mockResolvedValue({ id: 'app-1', name: 'Hello Static', projectId: 'proj-1' });
-        appMocks.getExtendedById.mockResolvedValue({ appDomains: [] });
-        domainMocks.generateHostname.mockResolvedValue('hello-static-abc123.quickstack.me');
+        appMocks.getExtendedById.mockResolvedValue({ appDomains: [], appPorts: [] });
+        domainMocks.generateHostname.mockResolvedValue('hello-static-abc123.irrigate.cc');
     });
 
-    it('creates a container app with port and generated domain', async () => {
+    it('creates an uploaded-source app with port and generated domain', async () => {
         const response = await POST(request({
             projectId: 'proj-1',
             name: 'Hello Static',
@@ -70,18 +70,19 @@ describe('agent ensure app route', () => {
         expect(appMocks.save).toHaveBeenCalledWith(expect.objectContaining({
             name: 'Hello Static',
             projectId: 'proj-1',
-            sourceType: 'CONTAINER',
+            sourceType: 'QUICKDEPLOY_UPLOAD',
+            buildMethod: 'RAILPACK',
             containerImageSource: 'registry.example/hello-static:abc123',
         }), true);
         expect(appMocks.savePort).toHaveBeenCalledWith({ appId: 'app-1', port: 80 });
         expect(appMocks.saveDomain).toHaveBeenCalledWith(expect.objectContaining({
             appId: 'app-1',
-            hostname: 'hello-static-abc123.quickstack.me',
+            hostname: 'hello-static-abc123.irrigate.cc',
             port: 80,
             useSsl: true,
             redirectHttps: true,
         }));
-        expect(body.url).toBe('https://hello-static-abc123.quickstack.me');
+        expect(body.url).toBe('https://hello-static-abc123.irrigate.cc');
     });
 
     it('rejects deploy-only keys without apps:write', async () => {
@@ -113,7 +114,8 @@ describe('agent ensure app route', () => {
             useNetworkPolicy: true,
         });
         appMocks.getExtendedById.mockResolvedValue({
-            appDomains: [{ id: 'domain-1', hostname: 'hello-static-abc123.quickstack.me' }],
+            appDomains: [{ id: 'domain-1', hostname: 'hello-static-abc123.irrigate.cc' }],
+            appPorts: [{ id: 'port-1', appId: 'app-1', port: 8080 }],
         });
 
         const response = await POST(request({
@@ -122,6 +124,7 @@ describe('agent ensure app route', () => {
             name: 'Hello Static',
             image: 'registry.example/hello-static:def456',
             port: 8080,
+            customHostname: 'hello-static-abc123.irrigate.cc',
         }));
 
         expect(response.status).toBe(200);
@@ -129,10 +132,12 @@ describe('agent ensure app route', () => {
             id: 'app-1',
             containerImageSource: 'registry.example/hello-static:def456',
         }), false);
+        expect(appMocks.savePort).not.toHaveBeenCalled();
         expect(appMocks.saveDomain).toHaveBeenCalledWith(expect.objectContaining({
             id: 'domain-1',
-            hostname: 'hello-static-abc123.quickstack.me',
+            hostname: 'hello-static-abc123.irrigate.cc',
             port: 8080,
+            redirectHttps: false,
         }));
     });
 });

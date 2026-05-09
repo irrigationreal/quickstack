@@ -78,6 +78,18 @@ describe('git.service integration', () => {
         expect(appGitSshKeyServiceMock.writePrivateKeyToTempFile).not.toHaveBeenCalled();
     }, 120_000);
 
+    it('rejects SSH repositories before cloning when the app has no deploy key', async () => {
+        await expect(gitService.openGitContext(createGitApp({
+            id: 'git-public-ssh-no-key',
+            sourceType: 'GIT_SSH',
+            gitUrl: GitTestRepositories.publicSshUrl,
+        }), async (ctx) => ctx.getLatestRemoteCommitHash()))
+            .rejects.toThrow('Git: SSH key is not configured for this app.');
+
+        expect(appGitSshKeyServiceMock.writePrivateKeyToTempFile).toHaveBeenCalledWith('git-public-ssh-no-key');
+        expect(appGitSshKeyServiceMock.cleanupTempKeyFile).toHaveBeenCalledWith('git-public-ssh-no-key');
+    }, 120_000);
+
     it.skipIf(!getPrivateGitSshKeyFromEnv())(
         'clones the private repository over SSH with an app key',
         async () => {

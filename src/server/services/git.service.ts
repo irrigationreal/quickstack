@@ -36,7 +36,7 @@ class GitService {
         try {
             const git = simpleGit();
             const sshKeyPath = input.sourceType === 'GIT_SSH'
-                ? await appGitSshKeyService.writePrivateKeyToTempFile(input.id)
+                ? await this.getRequiredGitSshKeyPath(input.id)
                 : undefined;
             if (sshKeyPath) {
                 git.env('GIT_SSH_COMMAND', this.getGitSshCommand(sshKeyPath));
@@ -73,7 +73,7 @@ class GitService {
 
         const git = simpleGit(gitPath);
         const sshKeyPath = app.sourceType === 'GIT_SSH'
-            ? await appGitSshKeyService.writePrivateKeyToTempFile(app.id)
+            ? await this.getRequiredGitSshKeyPath(app.id)
             : undefined;
         if (sshKeyPath) {
             git.env('GIT_SSH_COMMAND', this.getGitSshCommand(sshKeyPath));
@@ -95,11 +95,22 @@ class GitService {
         return app.gitUrl!;
     }
 
+    private async getRequiredGitSshKeyPath(appId: string) {
+        const sshKeyPath = await appGitSshKeyService.writePrivateKeyToTempFile(appId);
+        if (!sshKeyPath) {
+            throw new ServiceException("Git: SSH key is not configured for this app. Generate a deploy key and add its public key to your Git provider before using a Git SSH source.");
+        }
+        return sshKeyPath;
+    }
+
     private getGitSshCommand(sshConfigPath: string) {
         return `ssh -i ${sshConfigPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null`;
     }
 
     private mapGitConnectionError(error: unknown, sourceType: AppExtendedModel['sourceType']) {
+        if (error instanceof ServiceException) {
+            return error;
+        }
         if (error instanceof Error) {
             if (error.message.includes('Permission denied')) {
                 if (sourceType === 'GIT_SSH') {

@@ -59,18 +59,18 @@ class RegistryService {
         return false;
     }
 
-    createInternalContainerRegistryUrlForAppId(appId?: string) {
+    createInternalContainerRegistryUrlForAppId(appId?: string, tag = 'latest') {
         if (!appId) {
             return undefined;
         }
-        return `${REGISTRY_URL_INTERNAL}/${appId}:latest`;
+        return `${REGISTRY_URL_INTERNAL}/${appId}:${tag}`;
     }
 
-    createContainerRegistryUrlForAppId(appId?: string) {
+    createContainerRegistryUrlForAppId(appId?: string, tag = 'latest') {
         if (!appId) {
             return undefined;
         }
-        return `${REGISTRY_URL_EXTERNAL}/${appId}:latest`;
+        return `${REGISTRY_URL_EXTERNAL}/${appId}:${tag}`;
     }
 
     createManagedQuickDeployImageUrl(appId: string, contentHash: string, buildId: string) {

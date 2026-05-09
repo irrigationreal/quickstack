@@ -7,6 +7,7 @@ import { Constants } from "../../shared/utils/constants";
 export class ParamService {
 
     static readonly QS_SERVER_HOSTNAME = 'qsServerHostname';
+    static readonly GENERATED_APP_DOMAIN_SUFFIX = 'generatedAppDomainSuffix';
     static readonly DISABLE_NODEPORT_ACCESS = 'disableNodePortAccess';
     static readonly LETS_ENCRYPT_MAIL = 'letsEncryptMail';
     static readonly USE_CANARY_CHANNEL = 'useCanaryChannel';
@@ -90,6 +91,21 @@ export class ParamService {
 
     async getString(name: string, defaultValue?: string) {
         const param = await this.getOrUndefined(name);
+        if (param) {
+            return param.value;
+        }
+        if (defaultValue) {
+            await this.save({
+                name,
+                value: defaultValue
+            });
+            return defaultValue;
+        }
+        return undefined;
+    }
+
+    async getStringUncached(name: string, defaultValue?: string) {
+        const param = await this.getOrUndefinedUncached(name);
         if (param) {
             return param.value;
         }

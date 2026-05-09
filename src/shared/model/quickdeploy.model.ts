@@ -11,6 +11,7 @@ export const quickDeployEnsureAppZodModel = z.object({
     registryPassword: z.string().min(1).max(5000).optional(),
     port: z.number().int().min(1).max(65535).default(80),
     domainPrefix: z.string().trim().min(1).max(40).optional(),
+    customHostname: z.string().trim().toLowerCase().regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/, 'customHostname must be a valid hostname.').optional(),
     mode: quickDeployModeZodModel,
 });
 
@@ -18,9 +19,12 @@ export type QuickDeployEnsureAppModel = z.infer<typeof quickDeployEnsureAppZodMo
 
 export const quickDeployUploadModeZodModel = z.enum(['static', 'dockerfile']);
 
+export const quickDeployUploadArtifactTypeZodModel = z.enum(['source-tar', 'docker-image-tar']).default('source-tar');
+
 export const quickDeployUploadMetadataZodModel = z.object({
     projectId: z.string().min(1),
     mode: quickDeployUploadModeZodModel,
+    artifactType: quickDeployUploadArtifactTypeZodModel,
     contentHash: z.string().trim().regex(/^sha256:[a-f0-9]{64}$/i, 'contentHash must be a sha256 digest.'),
     uploadBytes: z.number().int().positive().optional(),
     dockerfilePath: z.string().trim().min(1).max(500).default('./Dockerfile'),

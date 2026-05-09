@@ -1,6 +1,8 @@
 const dataAccessMocks = vi.hoisted(() => ({
     quickDeployBuildCreate: vi.fn(),
     quickDeployBuildUpdate: vi.fn(),
+    quickDeployBuildFindFirstOrThrow: vi.fn(),
+    appUpdate: vi.fn(),
     transaction: vi.fn(),
 }));
 const quotaMocks = vi.hoisted(() => ({ reserveQuickDeployUploadQuota: vi.fn() }));
@@ -12,21 +14,29 @@ vi.mock('../adapter/db.client', () => ({
     default: {
         client: {
             $transaction: dataAccessMocks.transaction,
+            quickDeployBuild: {
+                update: dataAccessMocks.quickDeployBuildUpdate,
+                findFirstOrThrow: dataAccessMocks.quickDeployBuildFindFirstOrThrow,
+            },
         }
     }
 }));
 vi.mock('./security-quota.service', () => ({ default: quotaMocks }));
 vi.mock('./audit.service', () => ({ default: auditMocks }));
-vi.mock('./registry.service', () => ({ default: registryMocks }));
+vi.mock('./registry.service', () => ({
+    default: registryMocks,
+    REGISTRY_URL_INTERNAL: 'registry-svc.registry-and-build.svc.cluster.local:5000',
+    REGISTRY_URL_EXTERNAL: 'localhost:30100',
+}));
 vi.mock('fs/promises', () => ({ default: fsMocks, ...fsMocks }));
 
 import crypto from 'crypto';
 import quickDeployUploadService from './quickdeploy-upload.service';
 
-function createTar(entries: Array<{ name: string; content?: string; typeFlag?: string; linkName?: string }>) {
+function createTar(entries: Array<{ name: string; content?: string | Buffer; typeFlag?: string; linkName?: string }>) {
     const blocks: Buffer[] = [];
     for (const entry of entries) {
-        const content = Buffer.from(entry.content ?? '');
+        const content = Buffer.isBuffer(entry.content) ? entry.content : Buffer.from(entry.content ?? '');
         const header = Buffer.alloc(512);
         header.write(entry.name, 0, 'utf8');
         header.write('0000644\0', 100, 'ascii');
@@ -50,13 +60,25 @@ function createTar(entries: Array<{ name: string; content?: string; typeFlag?: s
     return Buffer.concat(blocks);
 }
 
-function metadataFor(body: Buffer) {
+function metadataFor(body: Buffer, artifactType: 'source-tar' | 'docker-image-tar' = 'source-tar') {
     return {
         projectId: 'proj-1',
         mode: 'static' as const,
+        artifactType,
         contentHash: `sha256:${crypto.createHash('sha256').update(body).digest('hex')}`,
         dockerfilePath: './Dockerfile',
     };
+}
+
+function createDockerImageTar() {
+    const layer = createTar([{ name: 'index.html', content: 'hello' }]);
+    const config = Buffer.from(JSON.stringify({ architecture: 'amd64', os: 'linux', rootfs: { type: 'layers', diff_ids: [`sha256:${crypto.createHash('sha256').update(layer).digest('hex')}`] } }));
+    const manifest = Buffer.from(JSON.stringify([{ Config: 'config.json', RepoTags: ['local/test:latest'], Layers: ['layer.tar'] }]));
+    return createTar([
+        { name: 'manifest.json', content: manifest.toString('utf8') },
+        { name: 'config.json', content: config.toString('utf8') },
+        { name: 'layer.tar', content: layer },
+    ]);
 }
 
 describe('quickdeploy-upload.service', () => {
@@ -66,23 +88,32 @@ describe('quickdeploy-upload.service', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         dataAccessMocks.transaction.mockImplementation(async (callback: any) => callback({
+            app: {
+                update: dataAccessMocks.appUpdate,
+            },
             quickDeployBuild: {
                 create: dataAccessMocks.quickDeployBuildCreate,
                 update: dataAccessMocks.quickDeployBuildUpdate,
             }
         }));
         dataAccessMocks.quickDeployBuildCreate.mockResolvedValue({ id: 'build-1' });
-        dataAccessMocks.quickDeployBuildUpdate.mockResolvedValue({
+        const savedBuild = {
             id: 'build-1',
             appId: 'app-1',
             projectId: 'proj-1',
             mode: 'static',
             contentHash: 'sha256:abc',
             uploadBytes: 5,
-            imageReference: 'registry/app-1:qd-abc-build-1',
+            imageReference: 'registry.local:5000/app-1:qd-abc-build-1',
             status: 'UPLOADED',
-        });
-        registryMocks.createManagedQuickDeployImageUrl.mockReturnValue('registry/app-1:qd-abc-build-1');
+        };
+        dataAccessMocks.quickDeployBuildUpdate.mockImplementation(async (input: any) => ({
+            ...savedBuild,
+            ...(input.data ?? {}),
+        }));
+        dataAccessMocks.quickDeployBuildFindFirstOrThrow.mockResolvedValue(savedBuild);
+        registryMocks.createManagedQuickDeployImageUrl.mockReturnValue('registry.local:5000/app-1:qd-abc-build-1');
+        vi.stubGlobal('fetch', vi.fn());
     });
 
     it('stores the raw upload without extracting it and creates a managed image tag', async () => {
@@ -107,7 +138,54 @@ describe('quickdeploy-upload.service', () => {
         });
         expect(registryMocks.createManagedQuickDeployImageUrl).toHaveBeenCalledWith('app-1', metadataFor(body).contentHash, 'build-1');
         expect(fsMocks.writeFile).toHaveBeenCalledWith(expect.stringContaining('build-1.tar'), body, { mode: 0o600 });
-        expect(result.imageReference).toBe('registry/app-1:qd-abc-build-1');
+        expect(result.imageReference).toBe('registry.local:5000/app-1:qd-abc-build-1');
+    });
+
+    it('accepts Dockerfile source archives created by tar -C root -cf bundle .', async () => {
+        const body = createTar([{ name: './Dockerfile', content: 'FROM node:22-alpine\n' }]);
+
+        await expect(quickDeployUploadService.acceptUpload({
+            app,
+            metadata: { ...metadataFor(body), mode: 'dockerfile' },
+            body,
+            actor,
+        })).resolves.toEqual(expect.objectContaining({ imageReference: 'registry.local:5000/app-1:qd-abc-build-1' }));
+
+        expect(fsMocks.writeFile).toHaveBeenCalledWith(expect.stringContaining('build-1.tar'), body, { mode: 0o600 });
+    });
+
+    it('pushes Docker image uploads into the internal registry and activates the managed image', async () => {
+        const body = createDockerImageTar();
+        const fetchMock = vi.mocked(fetch);
+        fetchMock.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+            const method = init?.method ?? 'GET';
+            if (method === 'HEAD') {
+                return new Response(null, { status: 404 });
+            }
+            if (method === 'POST') {
+                return new Response(null, { status: 202, headers: { location: '/v2/app-1/blobs/uploads/upload-1' } });
+            }
+            if (method === 'PUT') {
+                return new Response(null, { status: 201 });
+            }
+            return new Response(null, { status: 200 });
+        });
+
+        const result = await quickDeployUploadService.acceptUpload({ app, metadata: metadataFor(body, 'docker-image-tar'), body, actor });
+
+        expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/v2/app-1/manifests/qd-abc-build-1'), expect.objectContaining({ method: 'PUT' }));
+        expect(dataAccessMocks.appUpdate).toHaveBeenCalledWith({
+            where: { id: 'app-1' },
+            data: expect.objectContaining({
+                sourceType: 'CONTAINER',
+                containerImageSource: 'registry.local:5000/app-1:qd-abc-build-1',
+            }),
+        });
+        expect(dataAccessMocks.quickDeployBuildUpdate).toHaveBeenCalledWith({
+            where: { id: 'build-1' },
+            data: expect.objectContaining({ status: 'SUCCEEDED' }),
+        });
+        expect(result.status).toBe('SUCCEEDED');
     });
 
     it('rejects a mismatched content hash before storing bytes', async () => {

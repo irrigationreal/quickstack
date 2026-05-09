@@ -20,6 +20,7 @@ import registryService, { BUILD_NAMESPACE } from "./registry.service";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import { V1Job, V1JobList, V1JobStatus, V1ResourceRequirements } from "@kubernetes/client-node";
 import appGitSshKeyService from "./app-git-ssh-key.service";
+import quickDeployUploadService from "./quickdeploy-upload.service";
 
 class BuildService {
 
@@ -36,6 +37,23 @@ class BuildService {
         const buildMethod = this.getBuildMethod(app);
         await dlog(deploymentId, `Initialized app build...`);
         await dlog(deploymentId, `Selected build method: ${buildMethod}`);
+
+        if (app.sourceType === 'QUICKDEPLOY_UPLOAD') {
+            const uploadedBuild = await quickDeployUploadService.getLatestUploadedBuildForApp(app.id);
+            await dlog(deploymentId, `Using uploaded QuickDeploy source bundle: ${uploadedBuild.id}`);
+            await dlog(deploymentId, `Uploaded source hash: ${uploadedBuild.contentHash}`);
+            return this.createAndStartBuildJob(
+                deploymentId,
+                app,
+                uploadedBuild.contentHash,
+                `QuickDeploy upload ${uploadedBuild.id}`,
+                {
+                    quickDeployBuildId: uploadedBuild.id,
+                    quickDeployContentHash: uploadedBuild.contentHash,
+                },
+            );
+        }
+
         await dlog(deploymentId, `Trying to clone repository...`);
 
         const latestSuccessfulBuld = buildsForApp.find(x => x.status === 'SUCCEEDED');
@@ -56,7 +74,7 @@ class BuildService {
 
         if (!forceBuild && latestSuccessfulBuld?.gitCommit && latestRemoteGitHash &&
             latestSuccessfulBuld.gitCommit === latestRemoteGitHash) {
-            if (await registryService.doesImageExist(app.id, 'latest')) {
+            if (latestSuccessfulBuld.name && await registryService.doesImageExist(app.id, latestSuccessfulBuld.name)) {
                 await dlog(deploymentId, `Latest build is already up to date with git repository, using container from last build.`);
                 return [latestSuccessfulBuld.name, latestRemoteGitHash, latestRemoteGitCommitMessage, true];
             }
@@ -72,6 +90,7 @@ class BuildService {
         app: AppExtendedModel,
         latestRemoteGitHash: string,
         latestRemoteGitCommitMessage: string = '',
+        quickDeployBuild?: { quickDeployBuildId: string; quickDeployContentHash: string },
     ): Promise<[string, string, string, boolean]> {
         const buildName = KubeObjectNameUtils.addRandomSuffix(KubeObjectNameUtils.toJobName(app.id));
         const buildMethod = this.getBuildMethod(app);
@@ -102,8 +121,15 @@ class BuildService {
                 queuedAt,
                 ...schedulingConfig,
                 gitSshPrivateKeySecretName,
+                ...quickDeployBuild,
             });
 
+            if (quickDeployBuild?.quickDeployBuildId) {
+                await dataAccess.client.quickDeployBuild.update({
+                    where: { id: quickDeployBuild.quickDeployBuildId },
+                    data: { status: 'BUILDING' },
+                });
+            }
             await k3s.batch.createNamespacedJob(BUILD_NAMESPACE, jobDefinition);
         } catch (error) {
             await appGitSshKeyService.deleteTemporaryBuildSecret(gitSshPrivateKeySecretName);

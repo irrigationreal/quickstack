@@ -30,7 +30,7 @@ class RailpackBuildJobBuilder implements BuildJobBuilder {
             "--opt",
             `source=${RAILPACK_FRONTEND_IMAGE}`,
             "--output",
-            `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id)},push=true,registry.insecure=true`
+            `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, ctx.buildName)},push=true,registry.insecure=true`
         ];
 
         return {

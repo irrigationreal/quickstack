@@ -12,6 +12,8 @@ export type BuildJobBuilderContext = {
     nodeSelector?: Record<string, string>;
     resources?: V1ResourceRequirements;
     gitSshPrivateKeySecretName?: string;
+    quickDeployBuildId?: string;
+    quickDeployContentHash?: string;
 };
 
 export interface BuildJobBuilder {

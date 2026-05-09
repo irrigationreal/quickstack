@@ -11,6 +11,10 @@ export const BUILD_GIT_SSH_KEY_PATH = `${BUILD_GIT_SSH_KEY_MOUNT_PATH}/${GIT_SSH
 class BuildGitInitContainerService {
 
     getInitContainer(ctx: BuildJobBuilderContext): V1Container {
+        if (ctx.app.sourceType === 'QUICKDEPLOY_UPLOAD') {
+            return this.getUploadedSourceInitContainer(ctx);
+        }
+
         const script = [
             'set -eu',
             'rm -rf "$SOURCE_PATH"',
@@ -63,6 +67,51 @@ class BuildGitInitContainerService {
                     mountPath: BUILD_GIT_SSH_KEY_MOUNT_PATH,
                     readOnly: true,
                 }] : []),
+            ],
+        };
+    }
+
+    private getUploadedSourceInitContainer(ctx: BuildJobBuilderContext): V1Container {
+        const script = [
+            'set -eu',
+            'test -n "$QUICKDEPLOY_BUILD_ID"',
+            'test -n "$QUICKDEPLOY_CONTENT_HASH"',
+            'rm -rf "$SOURCE_PATH"',
+            'mkdir -p "$SOURCE_PATH" "$WORKSPACE_PATH"',
+            'wget --header="x-quickdeploy-content-hash: $QUICKDEPLOY_CONTENT_HASH" -O /tmp/quickdeploy-source.tar "$QUICKDEPLOY_ARCHIVE_URL"',
+            'tar -xf /tmp/quickdeploy-source.tar -C "$SOURCE_PATH"',
+            'echo "Successfully unpacked QuickDeploy source upload $QUICKDEPLOY_BUILD_ID"',
+        ].join('\n');
+
+        return {
+            name: BUILD_GIT_INIT_CONTAINER_NAME,
+            image: 'alpine:3.20',
+            command: ['sh', '-c'],
+            args: [script],
+            env: [
+                {
+                    name: 'QUICKDEPLOY_BUILD_ID',
+                    value: ctx.quickDeployBuildId,
+                },
+                {
+                    name: 'QUICKDEPLOY_CONTENT_HASH',
+                    value: ctx.quickDeployContentHash,
+                },
+                {
+                    name: 'QUICKDEPLOY_ARCHIVE_URL',
+                    value: `http://svc-quickstack.quickstack.svc.cluster.local:3000/api/v1/internal/quickdeploy-builds/${ctx.quickDeployBuildId}/archive`,
+                },
+                {
+                    name: 'WORKSPACE_PATH',
+                    value: BUILD_WORKSPACE_MOUNT_PATH,
+                },
+                {
+                    name: 'SOURCE_PATH',
+                    value: BUILD_SOURCE_PATH,
+                },
+            ],
+            volumeMounts: [
+                { name: BUILD_WORKSPACE_VOLUME_NAME, mountPath: BUILD_WORKSPACE_MOUNT_PATH },
             ],
         };
     }

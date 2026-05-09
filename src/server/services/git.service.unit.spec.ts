@@ -76,17 +76,17 @@ describe('GitService', () => {
         );
     });
 
-    it('uses plain SSH when GIT_SSH app has no generated key', async () => {
+    it('rejects GIT_SSH apps before cloning when no app deploy key is configured', async () => {
         vi.mocked(appGitSshKeyService.writePrivateKeyToTempFile).mockResolvedValue(undefined);
 
-        await gitService.openGitContext({
+        await expect(gitService.openGitContext({
             id: 'app-1',
             sourceType: 'GIT_SSH',
             gitUrl: 'git@github.com:biersoeckli/dummy-node-app.git',
             gitBranch: 'main',
-        } as any, async () => undefined);
+        } as any, async () => undefined)).rejects.toThrow('Git: SSH key is not configured for this app.');
 
-        expect(gitMock.clone).toHaveBeenCalledWith('git@github.com:biersoeckli/dummy-node-app.git', expect.any(String));
+        expect(gitMock.clone).not.toHaveBeenCalled();
         expect(gitMock.env).not.toHaveBeenCalled();
     });
 

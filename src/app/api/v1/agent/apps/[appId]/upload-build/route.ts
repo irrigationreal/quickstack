@@ -80,8 +80,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         return forbidden();
     }
 
-    const contentLength = Number(request.headers.get('content-length') ?? 0);
-    if (contentLength && contentLength > quickDeployUploadService.getDefaultMaxUploadBytes()) {
+    const contentLengthHeader = request.headers.get('content-length');
+    const contentLength = contentLengthHeader ? Number(contentLengthHeader) : 0;
+    if (!Number.isFinite(contentLength) || contentLength <= 0) {
+        return badRequest('QuickDeploy upload requires a valid content-length header.', 411);
+    }
+    if (contentLength > quickDeployUploadService.getDefaultMaxUploadBytes()) {
         await auditService.recordBestEffort({
             ...authenticated.auditActor,
             action: 'AGENT_QUICKDEPLOY_UPLOAD_REQUESTED',
