@@ -14,7 +14,7 @@ class QuickStackManagedService {
         name?: string;
         actor: AuditActor;
     }) {
-        const password = AppTemplateUtils.generateStrongPasswort(35);
+        const password = AppTemplateUtils.getRandomKey(48);
         const template = getRedisAppTemplate({ appName: input.name || 'Redis' });
         const mappedApp = AppTemplateUtils.mapTemplateInputValuesToApp(template, template.inputSettings);
         mappedApp.containerArgs = JSON.stringify(['--requirepass', password]);
