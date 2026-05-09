@@ -44,7 +44,7 @@ describe('agent deploy route', () => {
         apiKeyMocks.hasScope.mockReturnValue(true);
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
         appMocks.getById.mockResolvedValue({ id: 'app-1', name: 'Demo App', projectId: 'project-1' });
-        appMocks.buildAndDeploy.mockResolvedValue(undefined);
+        appMocks.buildAndDeploy.mockResolvedValue({ deploymentId: 'deployment-1' });
         authMocks.assertSessionCanWriteApp.mockReturnValue(authenticated.session);
     });
 

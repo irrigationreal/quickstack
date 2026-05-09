@@ -51,7 +51,7 @@ describe('agent app secret env route', () => {
 
         const response = await POST(request({ secrets: { API_TOKEN: 'secret-value' } }), { params: Promise.resolve({ appId: 'app-1' }) });
 
-        expect(response.status).toBe(403);
+        expect(response!.status).toBe(403);
         expect(secretMocks.upsertMany).not.toHaveBeenCalled();
         expect(auditMocks.recordBestEffort).toHaveBeenCalledWith(expect.objectContaining({
             action: 'AGENT_APP_SECRET_ENV_REQUESTED',
@@ -62,9 +62,9 @@ describe('agent app secret env route', () => {
 
     it('stores secret values without returning them', async () => {
         const response = await POST(request({ secrets: { API_TOKEN: 'secret-value' } }), { params: Promise.resolve({ appId: 'app-1' }) });
-        const json = await response.json();
+        const json = await response!.json();
 
-        expect(response.status).toBe(200);
+        expect(response!.status).toBe(200);
         expect(secretMocks.upsertMany).toHaveBeenCalledWith(expect.objectContaining({
             app: expect.objectContaining({ id: 'app-1', projectId: 'proj-1' }),
             secrets: [{ name: 'API_TOKEN', value: 'secret-value' }],
@@ -76,9 +76,9 @@ describe('agent app secret env route', () => {
 
     it('lists secret names only', async () => {
         const response = await GET(request(), { params: Promise.resolve({ appId: 'app-1' }) });
-        const json = await response.json();
+        const json = await response!.json();
 
-        expect(response.status).toBe(200);
+        expect(response!.status).toBe(200);
         expect(secretMocks.listNames).toHaveBeenCalledWith('app-1');
         expect(JSON.stringify(json)).not.toContain('encryptedValue');
         expect(json.secrets[0].name).toBe('API_TOKEN');

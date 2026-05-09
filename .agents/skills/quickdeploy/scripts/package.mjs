@@ -7,7 +7,7 @@ const root = path.resolve(process.argv[2] || process.cwd());
 const outIndex = process.argv.indexOf('--out');
 const outPath = path.resolve(outIndex >= 0 ? process.argv[outIndex + 1] : path.join(process.cwd(), 'quickdeploy-context.tar'));
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.next/cache', '.quickdeploy/generated', '.pnpm-store', '.turbo', '.cache', 'coverage']);
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.next/cache', '.quickdeploy/generated', '.pnpm-store', '.turbo', '.cache', 'coverage', '.venv', '__pycache__']);
 const SECRET_FILE_PATTERNS = [
   /^\.env($|\.)/,
   /^\.npmrc$/,

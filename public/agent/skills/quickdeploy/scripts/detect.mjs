@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const MAX_DEPTH = 4;
-const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', '.quickdeploy', '.turbo', '.cache', '.pnpm-store']);
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', '.quickdeploy', '.turbo', '.cache', '.pnpm-store', '.venv', '__pycache__']);
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 const K8S_DIRS = new Set(['k8s', 'kubernetes', 'deploy', '.k8s']);
 
@@ -72,6 +72,10 @@ function detectFramework(pkg, filesAtRoot) {
   return null;
 }
 
+function projectNameFromPyproject(text) {
+  return text.match(/^name\s*=\s*["']([^"']+)["']/m)?.[1];
+}
+
 function candidatePort(pkg, dockerfileText) {
   const scripts = Object.values(pkg?.scripts || {}).join('\n');
   const text = `${scripts}\n${dockerfileText}`;
@@ -79,6 +83,117 @@ function candidatePort(pkg, dockerfileText) {
   if (expose) return Number(expose);
   const port = text.match(/PORT\s*=\s*(\d+)/)?.[1] || text.match(/--port\s+(\d+)/)?.[1] || text.match(/-p\s+(\d+)/)?.[1];
   return port ? Number(port) : undefined;
+}
+
+function isWebPort(port) {
+  return [80, 443, 3000, 3001, 5000, 5173, 8000, 8080].includes(Number(port));
+}
+
+function addRawEndpointCandidate(candidates, candidate) {
+  const protocol = (candidate.protocol || 'TCP').toUpperCase();
+  if (protocol !== 'TCP') return;
+  const targetPort = Number(candidate.targetPort || candidate.containerPort || candidate.publicPort);
+  const publicPort = Number(candidate.publicPort || targetPort);
+  if (!Number.isInteger(targetPort) || !Number.isInteger(publicPort) || isWebPort(targetPort)) return;
+  const key = `${candidate.source}:${candidate.serviceName || ''}:${publicPort}:${targetPort}:${protocol}`;
+  if (candidates.some(item => item.key === key)) return;
+  candidates.push({
+    key,
+    source: candidate.source,
+    serviceName: candidate.serviceName,
+    publicPort,
+    targetPort,
+    protocol,
+    reason: candidate.reason || `non-web exposed port ${publicPort}`,
+  });
+}
+
+function parseComposePortValue(value) {
+  const text = String(value).trim().replace(/^['"]|['"]$/g, '');
+  if (!text || /^\d+$/.test(text)) return { targetPort: Number(text), publicPort: Number(text), protocol: 'TCP' };
+  const [addressAndPorts, protocol = 'TCP'] = text.split('/');
+  const parts = addressAndPorts.split(':').filter(Boolean);
+  const targetPort = Number(parts.at(-1));
+  const publicPort = Number(parts.length > 1 ? parts.at(-2) : parts.at(-1));
+  return { targetPort, publicPort, protocol };
+}
+
+async function detectComposeRawEndpoints(root, composeFiles) {
+  const candidates = [];
+  for (const file of composeFiles) {
+    const text = await readText(path.join(root, file));
+    let serviceName = '';
+    let inPorts = false;
+    for (const line of text.split(/\r?\n/)) {
+      const serviceMatch = line.match(/^  ([A-Za-z0-9._-]+):\s*$/);
+      if (serviceMatch) {
+        serviceName = serviceMatch[1];
+        inPorts = false;
+        continue;
+      }
+      if (/^\s{4}ports:\s*$/.test(line)) {
+        inPorts = true;
+        continue;
+      }
+      if (inPorts && /^\s{4}[A-Za-z0-9._-]+:\s*/.test(line)) {
+        inPorts = false;
+      }
+      const portMatch = inPorts ? line.match(/^\s*-\s*(.+?)\s*$/) : null;
+      if (portMatch) {
+        addRawEndpointCandidate(candidates, {
+          ...parseComposePortValue(portMatch[1]),
+          serviceName,
+          source: file,
+          reason: `compose service ${serviceName || 'unknown'} exposes a non-web port`,
+        });
+      }
+    }
+  }
+  return candidates.map(({ key, ...candidate }) => candidate);
+}
+
+async function detectKubernetesRawEndpoints(root, kubernetesFiles) {
+  const candidates = [];
+  for (const file of kubernetesFiles) {
+    const text = await readText(path.join(root, file));
+    if (!/kind\s*:\s*Service\b/.test(text)) continue;
+    const name = text.match(/metadata\s*:[\s\S]*?name\s*:\s*([A-Za-z0-9._-]+)/)?.[1] || path.basename(file);
+    const portBlocks = text.split(/\n\s*-\s+/).slice(1);
+    for (const block of portBlocks) {
+      const port = Number(block.match(/(?:^|\n)\s*port\s*:\s*(\d+)/)?.[1]);
+      const targetPort = Number(block.match(/(?:^|\n)\s*targetPort\s*:\s*(\d+)/)?.[1] || port);
+      const protocol = block.match(/(?:^|\n)\s*protocol\s*:\s*([A-Za-z]+)/)?.[1] || 'TCP';
+      addRawEndpointCandidate(candidates, {
+        serviceName: name,
+        source: file,
+        publicPort: port,
+        targetPort,
+        protocol,
+        reason: `kubernetes Service ${name} exposes a non-web port`,
+      });
+    }
+  }
+  return candidates.map(({ key, ...candidate }) => candidate);
+}
+
+async function detectDockerfileRoot(dir, rel, allFiles) {
+  const prefix = rel === '.' ? '' : `${rel}/`;
+  const filesAtRoot = allFiles.filter(file => path.dirname(file) === (rel === '.' ? '.' : rel)).map(file => path.basename(file));
+  const dockerfile = filesAtRoot.find(file => /^Dockerfile/i.test(file));
+  if (!dockerfile) return null;
+  const dockerfileText = await readText(path.join(dir, dockerfile));
+  const pyproject = await readText(path.join(dir, 'pyproject.toml'));
+  return {
+    root: rel,
+    name: projectNameFromPyproject(pyproject) || path.basename(dir),
+    framework: pyproject ? 'python' : null,
+    mode: 'dockerfile',
+    dockerfile,
+    buildCommand: undefined,
+    startCommand: undefined,
+    outputs: [],
+    candidatePort: candidatePort(null, dockerfileText),
+  };
 }
 
 async function detectPackageRoot(dir, rel, allFiles) {
@@ -111,9 +226,19 @@ async function detectPackageRoot(dir, rel, allFiles) {
 async function main() {
   const files = await walk(root);
   const packageRoots = [];
+  const detectedRoots = new Set();
   for (const file of files.filter(file => path.basename(file) === 'package.json')) {
     const rel = path.dirname(file) || '.';
     const detected = await detectPackageRoot(path.join(root, rel), rel, files);
+    if (detected) {
+      packageRoots.push(detected);
+      detectedRoots.add(rel);
+    }
+  }
+  for (const file of files.filter(file => /^Dockerfile/i.test(path.basename(file)))) {
+    const rel = path.dirname(file) || '.';
+    if (detectedRoots.has(rel)) continue;
+    const detected = await detectDockerfileRoot(path.join(root, rel), rel, files);
     if (detected) packageRoots.push(detected);
   }
 
@@ -127,6 +252,11 @@ async function main() {
     const text = await readText(path.join(root, file));
     if (/apiVersion\s*:/.test(text) && /kind\s*:/.test(text)) kubernetesFiles.push(file);
   }
+
+  const rawPublicEndpointCandidates = [
+    ...(await detectComposeRawEndpoints(root, composeFiles)),
+    ...(await detectKubernetesRawEndpoints(root, kubernetesFiles)),
+  ];
 
   const workspace = {
     pnpmWorkspace: files.includes('pnpm-workspace.yaml'),
@@ -155,6 +285,7 @@ async function main() {
     workspace,
     composeFiles,
     kubernetesFiles,
+    rawPublicEndpointCandidates,
     services: packageRoots,
     deployableServices,
     ambiguity,

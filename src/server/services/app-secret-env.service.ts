@@ -1,5 +1,7 @@
+import { revalidateTag } from "next/cache";
 import dataAccess from "../adapter/db.client";
 import { CryptoUtils } from "../utils/crypto.utils";
+import { Tags } from "../utils/cache-tag-generator.utils";
 import auditService, { AuditActor } from "./audit.service";
 import { ServiceException } from "@/shared/model/service.exception.model";
 
@@ -65,6 +67,8 @@ class AppSecretEnvService {
             appName: input.app.name,
             metadata: { names },
         });
+        revalidateTag(Tags.apps(input.app.projectId));
+        revalidateTag(Tags.app(input.app.id));
 
         return this.listNames(input.app.id);
     }
@@ -93,6 +97,8 @@ class AppSecretEnvService {
             appName: input.app.name,
             metadata: { names },
         });
+        revalidateTag(Tags.apps(input.app.projectId));
+        revalidateTag(Tags.app(input.app.id));
         return this.listNames(input.app.id);
     }
 

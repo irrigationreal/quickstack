@@ -3,6 +3,7 @@ import appService from "@/server/services/app.service";
 import deploymentService from "@/server/services/deployment.service";
 import auditService from "@/server/services/audit.service";
 import dataAccess from "@/server/adapter/db.client";
+import podService from "@/server/services/pod.service";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -47,8 +48,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
         return forbidden();
     }
 
-    const [deployment, deploymentRecords, quickDeployBuilds] = await Promise.all([
+    const [deployment, pods, deploymentRecords, quickDeployBuilds] = await Promise.all([
         deploymentService.getDeployment(app.projectId, app.id).catch(() => undefined),
+        podService.getPodsForApp(app.projectId, app.id).catch(() => []),
         dataAccess.client.deploymentRecord.findMany({
             where: { appId: app.id },
             orderBy: { createdAt: 'desc' },
@@ -60,6 +62,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
             take: 10,
         }).catch(() => []),
     ]);
+    const desiredReplicas = app.replicas ?? 0;
+    const readyReplicas = deployment?.status?.readyReplicas ?? 0;
+    const runningPods = pods.filter(pod => pod.status === 'Running').length;
+    const health = !deployment
+        ? 'missing'
+        : desiredReplicas > 0 && readyReplicas >= desiredReplicas
+            ? 'healthy'
+            : readyReplicas > 0 || runningPods > 0
+                ? 'degraded'
+                : 'unhealthy';
 
     await auditService.recordBestEffort({
         ...authenticated.auditActor,
@@ -85,12 +97,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
             ports: app.appPorts.map(port => ({ id: port.id, port: port.port })),
             domains: app.appDomains.map(domain => ({ id: domain.id, hostname: domain.hostname, port: domain.port, url: `https://${domain.hostname}` })),
         },
+        health,
+        replicas: {
+            desired: desiredReplicas,
+            current: deployment?.status?.replicas ?? 0,
+            ready: readyReplicas,
+            updated: deployment?.status?.updatedReplicas ?? 0,
+            unavailable: deployment?.status?.unavailableReplicas ?? 0,
+        },
+        pods,
         deployment: deployment ? {
             name: deployment.metadata?.name,
             namespace: deployment.metadata?.namespace,
             observedGeneration: deployment.status?.observedGeneration,
             replicas: deployment.status?.replicas ?? 0,
-            readyReplicas: deployment.status?.readyReplicas ?? 0,
+            readyReplicas,
             updatedReplicas: deployment.status?.updatedReplicas ?? 0,
             unavailableReplicas: deployment.status?.unavailableReplicas ?? 0,
             conditions: deployment.status?.conditions ?? [],
