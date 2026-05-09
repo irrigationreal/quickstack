@@ -757,6 +757,55 @@ async function commandPostgres() {
   die('Usage: quickstack postgres <create|list|attach|destroy> ...');
 }
 
+async function commandRedis() {
+  const sub = commandArgs[0];
+  if (sub === 'create') {
+    const projectId = optionValue('--project');
+    if (!projectId) die('Usage: quickstack redis create --project <projectId> [--attach <appId>] [--name <name>]');
+    await ensureCredentialsForApi();
+    const payload = {
+      projectId,
+      name: optionValue('--name'),
+      attachAppId: optionValue('--attach'),
+      secretName: optionValue('--secret-name') || 'REDIS_URL',
+    };
+    const result = api('redis', [JSON.stringify(payload)]);
+    emit('success', {
+      message: result.attached
+        ? `Created Redis ${result.redisAppId}, deployed it, and attached it as ${result.attached.secretName}.`
+        : `Created and deployed Redis ${result.redisAppId}.`,
+      result,
+    });
+    return;
+  }
+  if (sub === 'list') {
+    const projectId = optionValue('--project');
+    if (!projectId) die('Usage: quickstack redis list --project <projectId>');
+    await ensureCredentialsForApi();
+    const result = api('redis-list', [projectId]);
+    emit('success', { message: `Fetched ${result.redis?.length || 0} managed Redis resource(s).`, result });
+    return;
+  }
+  if (sub === 'attach') {
+    const redisAppId = commandArgs[1] || optionValue('--redis-app');
+    const appId = optionValue('--app');
+    if (!redisAppId || !appId) die('Usage: quickstack redis attach <redisAppId> --app <appId> [--secret-name REDIS_URL]');
+    await ensureCredentialsForApi();
+    const result = api('redis', [JSON.stringify({ mode: 'attach', redisAppId, appId, secretName: optionValue('--secret-name') || 'REDIS_URL' })]);
+    emit('success', { message: `Attached Redis ${redisAppId} to ${appId} as ${result.secretName}.`, result });
+    return;
+  }
+  if (sub === 'destroy') {
+    const redisAppId = commandArgs[1] || optionValue('--redis-app');
+    if (!redisAppId) die('Usage: quickstack redis destroy <redisAppId>');
+    await ensureCredentialsForApi();
+    const result = api('redis-destroy', [JSON.stringify({ redisAppId })]);
+    emit('success', { message: `Destroyed managed Redis ${redisAppId}.`, result });
+    return;
+  }
+  die('Usage: quickstack redis <create|list|attach|destroy> ...');
+}
+
 async function commandConfig() {
   const sub = commandArgs[0] || 'show';
   const rootArg = commandArgs.slice(1).find(arg => !arg.startsWith('-'));
@@ -917,12 +966,16 @@ Usage:
   quickstack postgres list --project <id>
   quickstack postgres attach <databaseAppId> --app <appId>
   quickstack postgres destroy <databaseAppId>
+  quickstack redis create --project <id> [--attach <appId>]
+  quickstack redis list --project <id>
+  quickstack redis attach <redisAppId> --app <appId>
+  quickstack redis destroy <redisAppId>
   quickstack config <show|validate>
-  quickstack api <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|postgres|postgres-list|postgres-destroy> ...
+  quickstack api <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|postgres|postgres-list|postgres-destroy|redis|redis-list|redis-destroy> ...
 
 Reserved first-class verbs:
-  rollback, checks, restart, scale, domains,
-  tokens, redis, volumes, registry, proxy, shell, unlink, destroy
+  checks, restart, domains,
+  tokens, registry, proxy, shell, unlink, destroy
 
 Credentials:
   quickstack setup stores the dashboard URL and qstk_ API key in ~/.quickstack/config.json with 0600 permissions.
@@ -949,6 +1002,7 @@ async function main() {
   if (command === 'secrets') return commandSecrets();
   if (command === 'config') return commandConfig();
   if (command === 'postgres') return commandPostgres();
+  if (command === 'redis') return commandRedis();
   if (command === 'endpoints') return commandEndpoints();
   if (command === 'volumes') return commandVolumes();
   if (command === 'exec' || command === 'ssh') return commandExec();
@@ -956,7 +1010,7 @@ async function main() {
   if (command === 'rollback') return commandRollback();
   if (['status', 'logs', 'releases'].includes(command)) return commandRemoteRead(command);
 
-  if (['checks', 'restart', 'domains', 'tokens', 'redis', 'volumes', 'registry', 'proxy', 'shell', 'unlink', 'destroy'].includes(command)) {
+  if (['checks', 'restart', 'domains', 'tokens', 'registry', 'proxy', 'shell', 'unlink', 'destroy'].includes(command)) {
     return commandNotImplemented(command);
   }
 

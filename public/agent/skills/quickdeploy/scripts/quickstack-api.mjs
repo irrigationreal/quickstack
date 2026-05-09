@@ -195,7 +195,32 @@ async function main() {
     return;
   }
 
-  die('Usage: quickstack-api.mjs <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|endpoints-list|endpoints-reserve|endpoints-release|volumes-list|volumes-add|volumes-remove|exec|postgres|postgres-list|postgres-destroy> ...');
+  if (command === 'redis') {
+    const payload = parseJsonArg(3, 'redis payload');
+    console.log(JSON.stringify(await request('/api/v1/agent/managed/redis', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }), null, 2));
+    return;
+  }
+
+  if (command === 'redis-list') {
+    const projectId = process.argv[3];
+    if (!projectId) die('Usage: quickstack-api.mjs redis-list <projectId>');
+    console.log(JSON.stringify(await request(`/api/v1/agent/managed/redis?projectId=${encodeURIComponent(projectId)}`), null, 2));
+    return;
+  }
+
+  if (command === 'redis-destroy') {
+    const payload = parseJsonArg(3, 'redis destroy payload');
+    console.log(JSON.stringify(await request('/api/v1/agent/managed/redis', {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    }), null, 2));
+    return;
+  }
+
+  die('Usage: quickstack-api.mjs <me|ensure|upload|deploy|scale|rollback|status|logs|releases|secrets-list|secrets-set|endpoints-list|endpoints-reserve|endpoints-release|volumes-list|volumes-add|volumes-remove|exec|postgres|postgres-list|postgres-destroy|redis|redis-list|redis-destroy> ...');
 }
 
 main().catch(error => die(error instanceof Error ? error.message : String(error)));

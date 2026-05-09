@@ -132,6 +132,20 @@ describe('AppTemplateService', () => {
                 expect(databaseModel.internalConnectionUrl).toBe(`postgresql://smoke%20user:5Xk5%25%25pXXR!vVW1OU%5D9TNLD-TZS9%24O-47aA@${KubeObjectNameUtils.toServiceName('pg-app-id')}:5432/smoke%20db`);
             });
 
+            it('should URL-encode Redis passwords in the internal connection URL', () => {
+                const app: AppExtendedModel = {
+                    appType: 'REDIS',
+                    envVars: '',
+                    containerArgs: JSON.stringify(['--requirepass', 'pa ss%word]$']),
+                    appPorts: [{ port: 6379 }],
+                    id: 'redis-app-id'
+                } as AppExtendedModel;
+
+                const databaseModel = AppTemplateUtils.getDatabaseModelFromApp(app);
+
+                expect(databaseModel.internalConnectionUrl).toBe(`redis://:pa%20ss%25word%5D%24@${KubeObjectNameUtils.toServiceName('redis-app-id')}:6379`);
+            });
+
             it('should throw ServiceException for unknown app type', () => {
                 const app: AppExtendedModel = {
                     appType: 'UNKNOWN',
