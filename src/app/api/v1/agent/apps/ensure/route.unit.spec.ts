@@ -71,7 +71,8 @@ describe('agent ensure app route', () => {
             name: 'Hello Static',
             projectId: 'proj-1',
             sourceType: 'QUICKDEPLOY_UPLOAD',
-            buildMethod: 'RAILPACK',
+            buildMethod: 'DOCKERFILE',
+            dockerfilePath: './.quickstack/generated-static.Dockerfile',
             containerImageSource: 'registry.example/hello-static:abc123',
         }), true);
         expect(appMocks.savePort).toHaveBeenCalledWith({ appId: 'app-1', port: 80 });

@@ -1,4 +1,4 @@
-import dockerfileBuildJobBuilder from "./dockerfile-build-job-builder.service";
+import dockerfileBuildJobBuilder, { BUILDKIT_IMAGE } from "./dockerfile-build-job-builder.service";
 
 vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({ default: {} }));
 
@@ -34,6 +34,7 @@ describe('DockerfileBuildJobBuilder', () => {
 
         const buildContainer = job.spec?.template?.spec?.containers[0]!;
 
+        expect(buildContainer.image).toBe(BUILDKIT_IMAGE);
         expect(buildContainer.command).toEqual(['buildctl-daemonless.sh']);
         expect(buildContainer.volumeMounts).toEqual([
             { name: 'build-workspace', mountPath: '/workspace' },
@@ -46,6 +47,29 @@ describe('DockerfileBuildJobBuilder', () => {
             'dockerfile=/workspace/source/apps/web',
         ]));
         expect(buildContainer.args).not.toContain('context=https://github.com/example/repo.git#refs/heads/main:./apps/web');
+    });
+
+    it('keeps the full source root as context for the generated static Dockerfile', async () => {
+        const job = await dockerfileBuildJobBuilder.buildJobDefinition({
+            app: {
+                id: 'app-1',
+                projectId: 'project-1',
+                sourceType: 'QUICKDEPLOY_UPLOAD',
+                dockerfilePath: './.quickstack/generated-static.Dockerfile',
+            } as any,
+            buildName: 'build-1',
+            deploymentId: 'deployment-1',
+            latestRemoteGitHash: 'sha256:abc',
+            latestRemoteGitCommitMessage: 'QuickDeploy upload build-1',
+            queuedAt: '123',
+        });
+
+        const buildContainer = job.spec?.template?.spec?.containers[0]!;
+        expect(buildContainer.args).toEqual(expect.arrayContaining([
+            'filename=.quickstack/generated-static.Dockerfile',
+            'context=/workspace/source',
+            'dockerfile=/workspace/source',
+        ]));
     });
 
     it('adds an SSH key secret volume when provided', async () => {

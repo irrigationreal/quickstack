@@ -141,6 +141,25 @@ function api(commandName, args, { parseJson = true } = {}) {
   return helper('quickstack-api.mjs', [commandName, ...args], { parseJson });
 }
 
+function apiUpload(appId, tarPath, metadata, packageInfo) {
+  const result = spawnSync(process.execPath, [path.join(skillRoot, 'scripts', 'quickstack-api.mjs'), 'upload', appId, tarPath, JSON.stringify(metadata)], {
+    encoding: 'utf8',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    const message = (result.stderr || result.stdout || 'upload failed').trim();
+    const packageContext = packageInfo
+      ? ` Packaged source was ${formatBytes(packageInfo.uploadBytes)} across ${packageInfo.fileCount} files. Large files are included by default; narrow --service-root or add explicit .quickdeployignore rules only for files that are not deploy inputs.`
+      : '';
+    die(`${message}${packageContext}`, result.status || 1, { warnings: packageInfo?.warnings || [] });
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    die('quickstack-api.mjs did not return valid JSON.');
+  }
+}
+
 function resolveRoot() {
   return path.resolve(positionalArgs()[0] || process.cwd());
 }
@@ -259,7 +278,19 @@ function readTarString(block, start, length) {
   return block.subarray(start, start + length).toString('utf8').replace(/\0.*$/, '').trim();
 }
 
-async function sha256TarContents(file) {
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return 'unknown size';
+  const units = ['B', 'KiB', 'MiB', 'GiB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+async function analyzeTarContents(file) {
   const body = await fs.readFile(file);
   const entries = [];
   for (let offset = 0; offset + 512 <= body.length; offset += 512) {
@@ -284,7 +315,14 @@ async function sha256TarContents(file) {
     hash.update(entry.body);
     hash.update('\0');
   }
-  return `sha256:${hash.digest('hex')}`;
+  return {
+    sourceContentHash: `sha256:${hash.digest('hex')}`,
+    fileCount: entries.length,
+    topFiles: entries
+      .map(entry => ({ path: entry.name, bytes: entry.body.length, size: formatBytes(entry.body.length) }))
+      .sort((a, b) => b.bytes - a.bytes)
+      .slice(0, 10),
+  };
 }
 
 function serviceForLaunch(detection) {
@@ -297,11 +335,11 @@ function serviceForLaunch(detection) {
   return detection.deployableServices?.[0];
 }
 
-async function dockerignoreTarArgs(servicePath) {
-  const dockerignorePath = path.join(servicePath, '.dockerignore');
-  const dockerignore = await fs.readFile(dockerignorePath, 'utf8').catch(() => '');
-  if (!dockerignore.trim()) return [];
-  return ['--exclude-from', dockerignorePath];
+async function quickdeployIgnoreTarArgs(servicePath) {
+  const ignorePath = path.join(servicePath, '.quickdeployignore');
+  const ignore = await fs.readFile(ignorePath, 'utf8').catch(() => '');
+  if (!ignore.trim()) return [];
+  return ['--exclude-from', ignorePath];
 }
 
 async function packageManagedSource(root, service) {
@@ -314,10 +352,16 @@ async function packageManagedSource(root, service) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'quickstack-launch-'));
   const tarPath = path.join(tmpRoot, 'source.tar');
   try {
-    const dockerignoreArgs = await dockerignoreTarArgs(servicePath);
-    runChecked('tar', ['-C', servicePath, ...dockerignoreArgs, '-cf', tarPath, '.']);
+    const ignoreArgs = await quickdeployIgnoreTarArgs(servicePath);
+    runChecked('tar', ['-C', servicePath, ...ignoreArgs, '-cf', tarPath, '.']);
     const fileHash = await sha256File(tarPath);
-    return { mode, tarPath, artifactType: 'source-tar', ...fileHash, sourceContentHash: await sha256TarContents(tarPath) };
+    const tarAnalysis = await analyzeTarContents(tarPath);
+    const warnings = [];
+    if (fileHash.uploadBytes >= 100 * 1024 * 1024) {
+      const largestFiles = tarAnalysis.topFiles.map(file => `${file.path} (${file.size})`).join(', ');
+      warnings.push(`QuickDeploy source archive is ${formatBytes(fileHash.uploadBytes)} across ${tarAnalysis.fileCount} files. Large files are included by default because they may be required at build/runtime; narrow --service-root or add explicit .quickdeployignore rules if these are not deploy inputs. Largest files: ${largestFiles || 'none'}.`);
+    }
+    return { mode, tarPath, artifactType: 'source-tar', ...fileHash, ...tarAnalysis, warnings };
   } catch (error) {
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => undefined);
     throw error;
@@ -383,14 +427,14 @@ async function commandLaunch() {
 
     let uploadedBuild;
     if (managedBuild) {
-      uploadedBuild = api('upload', [ensured.appId, managedBuild.tarPath, JSON.stringify({
+      uploadedBuild = apiUpload(ensured.appId, managedBuild.tarPath, {
         projectId,
         mode: managedBuild.mode,
         artifactType: managedBuild.artifactType,
         contentHash: managedBuild.contentHash,
         uploadBytes: managedBuild.uploadBytes,
         dockerfilePath: service?.dockerfile || './Dockerfile',
-      })]);
+      }, managedBuild);
     }
 
     if (!hasFlag('--no-deploy')) {
@@ -407,7 +451,7 @@ async function commandLaunch() {
       mode: image ? 'image' : managedBuild.mode,
       port,
       domain: { mode: customHostname ? 'custom' : 'generated', hostname: ensured.hostname, url: ensured.url },
-      image: image ? { managed: false, reference: image } : { managed: true, reference: uploadedBuild.imageReference, buildId: uploadedBuild.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType },
+      image: image ? { managed: false, reference: image } : { managed: true, reference: uploadedBuild.imageReference, buildId: uploadedBuild.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType, packageSummary: { fileCount: managedBuild.fileCount, topFiles: managedBuild.topFiles } },
       publicEndpoints: reservedEndpoints.map(endpoint => ({ id: endpoint.id, publicIp: endpoint.publicIp, publicPort: endpoint.publicPort, targetPort: endpoint.targetPort, protocol: endpoint.protocol, status: endpoint.status })),
       updatedAt: new Date().toISOString(),
     };
@@ -416,6 +460,7 @@ async function commandLaunch() {
 
     emit('success', {
       message: hasFlag('--no-deploy') ? `QuickStack app configured: ${ensured.url}` : `QuickStack app deployed: ${ensured.url}`,
+      warnings: managedBuild?.warnings || [],
       app: appState,
     });
   } finally {
@@ -438,26 +483,28 @@ async function commandDeploy() {
   await ensureCredentialsForApi();
   let updatedApp = selected;
   let result = null;
+  let packageWarnings = [];
   let sourceChanged = selected.mode === 'image';
   const forceBuild = hasFlag('--force') || hasFlag('--force-build');
   if (selected.mode !== 'image') {
     const detection = helper('detect.mjs', [root], { parseJson: true });
     const service = detection.deployableServices?.find(item => item.root === selected.serviceRoot) || { root: selected.serviceRoot, mode: selected.mode };
     const managedBuild = await packageManagedSource(root, service);
+    packageWarnings = managedBuild.warnings || [];
     try {
       sourceChanged = managedBuild.sourceContentHash !== (selected.image?.sourceContentHash || selected.image?.contentHash);
       if (sourceChanged || forceBuild) {
-        const upload = api('upload', [selected.appId, managedBuild.tarPath, JSON.stringify({
+        const upload = apiUpload(selected.appId, managedBuild.tarPath, {
           projectId: selected.projectId,
           mode: managedBuild.mode,
           artifactType: managedBuild.artifactType,
           contentHash: managedBuild.contentHash,
           uploadBytes: managedBuild.uploadBytes,
           dockerfilePath: service?.dockerfile || './Dockerfile',
-        })]);
+        }, managedBuild);
         updatedApp = {
           ...selected,
-          image: { managed: true, reference: upload.imageReference, buildId: upload.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType },
+          image: { managed: true, reference: upload.imageReference, buildId: upload.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType, packageSummary: { fileCount: managedBuild.fileCount, topFiles: managedBuild.topFiles } },
           updatedAt: new Date().toISOString(),
         };
         await writeJson(path.join(root, '.quickdeploy', 'apps', `${selected.appId}.json`), updatedApp);
@@ -483,7 +530,7 @@ async function commandDeploy() {
     : reservedEndpoints.length > 0
       ? `No source changes detected for ${selected.name || selected.appId}; endpoint reservations updated.`
       : `No source changes detected for ${selected.name || selected.appId}; nothing to deploy.`;
-  emit('success', { message, deployment: result, app: updatedApp, publicEndpoints: reservedEndpoints, skipped: !result });
+  emit('success', { message, warnings: packageWarnings, deployment: result, app: updatedApp, publicEndpoints: reservedEndpoints, skipped: !result });
 }
 
 function parseDotenv(text) {

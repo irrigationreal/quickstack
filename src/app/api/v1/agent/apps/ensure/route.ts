@@ -67,14 +67,20 @@ export async function POST(request: Request) {
     }
 
     const isManagedSource = input.mode !== 'image';
+    const buildMethod = input.mode === 'image' ? existingApp?.buildMethod ?? 'RAILPACK' : 'DOCKERFILE';
+    const dockerfilePath = input.mode === 'static'
+        ? './.quickstack/generated-static.Dockerfile'
+        : input.mode === 'dockerfile'
+            ? './Dockerfile'
+            : existingApp?.dockerfilePath ?? './Dockerfile';
     const savedApp = await appService.save({
         ...(existingApp ? { id: existingApp.id } : {}),
         name: input.name,
         projectId: input.projectId,
         appType: 'APP',
         sourceType: isManagedSource ? 'QUICKDEPLOY_UPLOAD' : 'CONTAINER',
-        buildMethod: input.mode === 'dockerfile' ? 'DOCKERFILE' : existingApp?.buildMethod ?? 'RAILPACK',
-        dockerfilePath: input.mode === 'dockerfile' ? './Dockerfile' : existingApp?.dockerfilePath ?? './Dockerfile',
+        buildMethod,
+        dockerfilePath,
         containerImageSource: input.image,
         containerRegistryUsername: isManagedSource ? null : input.registryUsername ?? existingApp?.containerRegistryUsername ?? null,
         containerRegistryPassword: isManagedSource ? null : input.registryPassword ?? existingApp?.containerRegistryPassword ?? null,

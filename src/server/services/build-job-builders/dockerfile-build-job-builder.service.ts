@@ -8,7 +8,7 @@ import registryService, { BUILD_NAMESPACE } from "../registry.service";
 import { PathUtils } from "@/server/utils/path.utils";
 import { BUILD_SOURCE_PATH, BUILD_WORKSPACE_MOUNT_PATH, BUILD_WORKSPACE_VOLUME_NAME } from "./build-workspace.constants";
 
-const buildkitImage = "moby/buildkit:master";
+export const BUILDKIT_IMAGE = process.env.QS_BUILDKIT_IMAGE || "moby/buildkit:v0.29.0";
 
 class DockerfileBuildJobBuilder implements BuildJobBuilder {
     readonly buildMethod: AppBuildMethod = 'DOCKERFILE';
@@ -27,7 +27,7 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
             "--local",
             `dockerfile=${dockerfileContextPath}`,
             "--opt",
-            `filename=${contextPaths.filePath}`,
+            `filename=${this.getDockerfileFilename(ctx.app.dockerfilePath || './Dockerfile', contextPaths.filePath)}`,
             "--import-cache",
             `type=registry,ref=${cacheReference},registry.insecure=true`,
             "--export-cache",
@@ -78,7 +78,7 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
                         containers: [
                             {
                                 name: ctx.buildName,
-                                image: buildkitImage,
+                                image: BUILDKIT_IMAGE,
                                 command: ["buildctl-daemonless.sh"],
                                 args: buildkitArgs,
                                 securityContext: {
@@ -109,12 +109,17 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
         };
     }
 
+    private getDockerfileFilename(dockerfilePath: string, filePath: string) {
+        return dockerfilePath === './.quickstack/generated-static.Dockerfile' ? '.quickstack/generated-static.Dockerfile' : filePath;
+    }
+
     private getDockerfileContextPath(folderPath: string | undefined) {
-        if (!folderPath) {
+        const normalizedFolderPath = folderPath?.replace(/\/$/, '');
+        if (!normalizedFolderPath || normalizedFolderPath === './.quickstack' || normalizedFolderPath === '.quickstack') {
             return BUILD_SOURCE_PATH;
         }
 
-        return `${BUILD_SOURCE_PATH}/${folderPath.replace(/^\.\//, '')}`;
+        return `${BUILD_SOURCE_PATH}/${normalizedFolderPath.replace(/^\.\//, '')}`;
     }
 }
 

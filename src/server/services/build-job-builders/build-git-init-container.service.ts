@@ -7,6 +7,8 @@ export const BUILD_GIT_SSH_KEY_VOLUME_NAME = 'build-git-ssh-key';
 export const BUILD_GIT_SSH_KEY_MOUNT_PATH = '/git-ssh-key';
 const GIT_SSH_PRIVATE_KEY_SECRET_KEY = 'ssh-privatekey';
 export const BUILD_GIT_SSH_KEY_PATH = `${BUILD_GIT_SSH_KEY_MOUNT_PATH}/${GIT_SSH_PRIVATE_KEY_SECRET_KEY}`;
+export const GIT_INIT_IMAGE = process.env.QS_GIT_INIT_IMAGE || 'alpine/git:2.49.1';
+export const UPLOADED_SOURCE_INIT_IMAGE = process.env.QS_UPLOADED_SOURCE_INIT_IMAGE || 'alpine:3.22';
 
 class BuildGitInitContainerService {
 
@@ -31,7 +33,7 @@ class BuildGitInitContainerService {
 
         return {
             name: BUILD_GIT_INIT_CONTAINER_NAME,
-            image: 'alpine/git',
+            image: GIT_INIT_IMAGE,
             command: ['sh', '-c'],
             args: [script],
             env: [
@@ -80,12 +82,25 @@ class BuildGitInitContainerService {
             'mkdir -p "$SOURCE_PATH" "$WORKSPACE_PATH"',
             'wget --header="x-quickdeploy-content-hash: $QUICKDEPLOY_CONTENT_HASH" -O /tmp/quickdeploy-source.tar "$QUICKDEPLOY_ARCHIVE_URL"',
             'tar -xf /tmp/quickdeploy-source.tar -C "$SOURCE_PATH"',
+            'if [ "$QUICKSTACK_GENERATED_STATIC_DOCKERFILE" = "true" ]; then',
+            '  mkdir -p "$SOURCE_PATH/.quickstack"',
+            '  cat > "$SOURCE_PATH/.quickstack/generated-static.Dockerfile" <<\'QUICKSTACK_STATIC_DOCKERFILE\'',
+            'FROM node:22-alpine AS build',
+            'WORKDIR /app',
+            'COPY . .',
+            'RUN corepack enable || true',
+            'RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm run build; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile && yarn build; elif [ -f package-lock.json ]; then npm ci && npm run build; else npm install && npm run build; fi',
+            'RUN mkdir -p /quickstack-static && for dir in dist build out; do if [ -d "$dir" ]; then cp -a "$dir"/. /quickstack-static/; exit 0; fi; done; echo "No static output directory found. Expected dist, build, or out." >&2; exit 1',
+            'FROM nginx:1.27-alpine',
+            'COPY --from=build /quickstack-static /usr/share/nginx/html',
+            'QUICKSTACK_STATIC_DOCKERFILE',
+            'fi',
             'echo "Successfully unpacked QuickDeploy source upload $QUICKDEPLOY_BUILD_ID"',
         ].join('\n');
 
         return {
             name: BUILD_GIT_INIT_CONTAINER_NAME,
-            image: 'alpine:3.20',
+            image: UPLOADED_SOURCE_INIT_IMAGE,
             command: ['sh', '-c'],
             args: [script],
             env: [
@@ -108,6 +123,10 @@ class BuildGitInitContainerService {
                 {
                     name: 'SOURCE_PATH',
                     value: BUILD_SOURCE_PATH,
+                },
+                {
+                    name: 'QUICKSTACK_GENERATED_STATIC_DOCKERFILE',
+                    value: ctx.app.dockerfilePath === './.quickstack/generated-static.Dockerfile' ? 'true' : 'false',
                 },
             ],
             volumeMounts: [

@@ -1,4 +1,4 @@
-import railpackBuildJobBuilder, { RAILPACK_FRONTEND_IMAGE } from "./railpack-build-job-builder.service";
+import railpackBuildJobBuilder, { BUILDKIT_IMAGE, RAILPACK_FRONTEND_IMAGE, RAILPACK_PREPARE_IMAGE } from "./railpack-build-job-builder.service";
 
 vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({ default: {} }));
 
@@ -41,7 +41,9 @@ describe('RailpackBuildJobBuilder', () => {
             'dockerfile=/workspace/plan',
         ]));
 
+        expect(buildContainer.image).toBe(BUILDKIT_IMAGE);
         const prepareContainer = initContainers.find((container) => container.name === 'railpack-prepare-init')!;
+        expect(prepareContainer.image).toBe(RAILPACK_PREPARE_IMAGE);
         expect(prepareContainer.env?.map((entry) => entry.name)).not.toContain('GIT_URL');
         expect(prepareContainer.args?.[0]).not.toContain('git clone');
     });

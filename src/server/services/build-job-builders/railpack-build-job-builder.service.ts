@@ -7,12 +7,13 @@ import buildGitInitContainerService, { BUILD_GIT_SSH_KEY_VOLUME_NAME } from "./b
 import registryService, { BUILD_NAMESPACE } from "../registry.service";
 import { BUILD_SOURCE_PATH, BUILD_WORKSPACE_MOUNT_PATH, BUILD_WORKSPACE_VOLUME_NAME, RAILPACK_PLAN_PATH } from "./build-workspace.constants";
 
-const buildkitImage = "moby/buildkit:master";
+export const BUILDKIT_IMAGE = process.env.QS_BUILDKIT_IMAGE || "moby/buildkit:v0.29.0";
 const railpackVersion = "0.15.1";
-export const RAILPACK_FRONTEND_IMAGE = `ghcr.io/railwayapp/railpack-frontend:v${railpackVersion}`;
+export const RAILPACK_FRONTEND_IMAGE = process.env.QS_RAILPACK_FRONTEND_IMAGE || `ghcr.io/railwayapp/railpack-frontend:v${railpackVersion}`;
 
 const railpackPlanFile = `${RAILPACK_PLAN_PATH}/railpack-plan.json`;
 const railpackInfoFile = `${RAILPACK_PLAN_PATH}/railpack-info.json`;
+export const RAILPACK_PREPARE_IMAGE = process.env.QS_RAILPACK_PREPARE_IMAGE || 'debian:12.11-slim';
 
 class RailpackBuildJobBuilder implements BuildJobBuilder {
 
@@ -81,7 +82,7 @@ class RailpackBuildJobBuilder implements BuildJobBuilder {
                         containers: [
                             {
                                 name: ctx.buildName,
-                                image: buildkitImage,
+                                image: BUILDKIT_IMAGE,
                                 command: ["buildctl-daemonless.sh"],
                                 args: buildkitArgs,
                                 securityContext: {
@@ -127,7 +128,7 @@ class RailpackBuildJobBuilder implements BuildJobBuilder {
 
         return {
             name: 'railpack-prepare-init',
-            image: 'debian:bookworm-slim',
+            image: RAILPACK_PREPARE_IMAGE,
             command: ['bash', '-lc'],
             args: [script],
             env: [

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createReadStream } from 'node:fs';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { configString, readQuickStackConfig } from './config.mjs';
 
@@ -15,6 +16,9 @@ function die(message) {
 
 if (!QUICKSTACK_URL) die('QUICKSTACK_URL is required.');
 if (!QUICKSTACK_API_KEY) die('QUICKSTACK_API_KEY is required.');
+
+const CHUNK_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
+const CHUNK_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
 
 async function request(path, options = {}) {
   const response = await fetch(`${QUICKSTACK_URL}${path}`, {
@@ -33,6 +37,46 @@ async function request(path, options = {}) {
     die(`QuickStack API ${response.status}: ${message}`);
   }
   return body;
+}
+
+async function uploadBuild(appId, tarPath, metadata) {
+  const stat = await fs.stat(tarPath);
+  const uploadPath = `/api/v1/agent/apps/${encodeURIComponent(appId)}/upload-build`;
+  if (stat.size <= CHUNK_UPLOAD_THRESHOLD_BYTES) {
+    return await request(uploadPath, {
+      method: 'POST',
+      body: createReadStream(tarPath),
+      duplex: 'half',
+      headers: {
+        'content-type': 'application/x-tar',
+        'content-length': String(stat.size),
+        'x-quickdeploy-metadata': JSON.stringify(metadata),
+      },
+    });
+  }
+
+  const uploadId = `qd-${crypto.randomUUID()}`;
+  const chunkCount = Math.ceil(stat.size / CHUNK_UPLOAD_SIZE_BYTES);
+  let lastResponse = null;
+  for (let index = 0; index < chunkCount; index += 1) {
+    const start = index * CHUNK_UPLOAD_SIZE_BYTES;
+    const end = Math.min(stat.size, start + CHUNK_UPLOAD_SIZE_BYTES) - 1;
+    lastResponse = await request(uploadPath, {
+      method: 'POST',
+      body: createReadStream(tarPath, { start, end }),
+      duplex: 'half',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'content-length': String(end - start + 1),
+        'x-quickdeploy-metadata': JSON.stringify(metadata),
+        'x-quickdeploy-upload-id': uploadId,
+        'x-quickdeploy-chunk-index': String(index),
+        'x-quickdeploy-chunk-count': String(chunkCount),
+        'x-quickdeploy-total-bytes': String(stat.size),
+      },
+    });
+  }
+  return lastResponse;
 }
 
 function parseJsonArg(index, name) {
@@ -61,17 +105,7 @@ async function main() {
     const tarPath = process.argv[4];
     const metadata = parseJsonArg(5, 'upload metadata');
     if (!appId || !tarPath) die('Usage: quickstack-api.mjs upload <appId> <tarPath> <metadataJson>');
-    const stat = await fs.stat(tarPath);
-    console.log(JSON.stringify(await request(`/api/v1/agent/apps/${encodeURIComponent(appId)}/upload-build`, {
-      method: 'POST',
-      body: createReadStream(tarPath),
-      duplex: 'half',
-      headers: {
-        'content-type': 'application/x-tar',
-        'content-length': String(stat.size),
-        'x-quickdeploy-metadata': JSON.stringify(metadata),
-      },
-    }), null, 2));
+    console.log(JSON.stringify(await uploadBuild(appId, tarPath, metadata), null, 2));
     return;
   }
 

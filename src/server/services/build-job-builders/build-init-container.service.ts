@@ -6,6 +6,7 @@ import { Constants } from "@/shared/utils/constants";
 const SERVICE_ACCOUNT_NAME = 'qs-build-watcher';
 const ROLE_NAME = 'qs-build-watcher-role';
 const ROLE_BINDING_NAME = 'qs-build-watcher-binding';
+export const KUBECTL_IMAGE = process.env.QS_KUBECTL_IMAGE || 'alpine/k8s:1.33.1';
 
 class BuildInitContainerService {
 
@@ -84,7 +85,7 @@ class BuildInitContainerService {
 
         return {
             name: Constants.QS_BUILD_INIT_CONTAINER_NAME,
-            image: 'bitnami/kubectl:latest',
+            image: KUBECTL_IMAGE,
             command: ['sh', '-c'],
             args: [script],
             env: [

@@ -52,8 +52,9 @@ Never read credentials from `.quickdeploy` and never write them there. `.quickde
    Ask for project selection, service selection, port, public domain choice for a new app, one-app-vs-two-app topology, Compose/Kubernetes mapping, database/cache treatment, secret/public env classification, build command/output folder, branch/environment target, private registry credentials, or whether to reuse an existing app.
 
 4. Package safely when upload mode is used.
-   - Run `node .agents/skills/quickdeploy/scripts/package.mjs <root> --out <tar-path>`.
-   - The packager rejects symlinks/hardlinks and forbidden secret/cached paths.
+   - Run `node .agents/skills/quickdeploy/scripts/package.mjs <root> --out <tar-path>` when debugging packaging directly; normal `launch`/`deploy` packages internally.
+   - Do not silently drop large files, dependency directories, build outputs, or caches. If something should be excluded from the uploaded source archive, it must be an explicit `.quickdeployignore` rule, or the CLI should report a warning/error instead of guessing.
+   - The packager rejects symlinks because source upload archives must preserve concrete file bytes, not host-local links. It does not silently omit dependency folders, caches, build outputs, `.env`, or other project files.
    - Use the returned `sha256:<hex>` hash in `x-quickdeploy-metadata`.
    - Do not mutate the tar between hashing and upload.
 

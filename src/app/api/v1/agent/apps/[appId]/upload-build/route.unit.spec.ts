@@ -17,17 +17,20 @@ vi.mock('@/server/services/app.service', () => ({ default: appMocks }));
 vi.mock('@/server/services/audit.service', () => ({ default: auditMocks }));
 vi.mock('@/server/services/quickdeploy-upload.service', () => ({ default: uploadMocks }));
 vi.mock('@/server/utils/action-wrapper.utils', () => ({ assertSessionCanWriteApp: authMocks.assertSessionCanWriteApp }));
+vi.mock('@/server/utils/path.utils', () => ({ PathUtils: { internalDataRoot: '/tmp/quickstack-upload-route-test' } }));
 
 import { POST } from './route';
 import crypto from 'crypto';
+import fs from 'fs/promises';
 
-function request(body: Buffer, metadata: Record<string, unknown>) {
+function request(body: Buffer, metadata: Record<string, unknown>, headers: Record<string, string> = {}) {
     return new Request('http://quickstack.test/api/v1/agent/apps/app-1/upload-build', {
         method: 'POST',
         headers: {
             authorization: 'Bearer qstk_prefix_secret',
             'x-quickdeploy-metadata': JSON.stringify(metadata),
             'content-length': String(body.length),
+            ...headers,
         },
         body,
     });
@@ -48,8 +51,9 @@ describe('agent QuickDeploy upload route', () => {
         auditActor: { actorType: 'API_KEY', actorUserId: 'user-1', actorEmail: 'admin@example.com', apiKeyId: 'key-1', apiKeyName: 'Claude agent' },
     };
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
+        await fs.rm('/tmp/quickstack-upload-route-test', { recursive: true, force: true });
         apiKeyMocks.authenticateAuthorizationHeader.mockResolvedValue(authenticated);
         apiKeyMocks.hasScope.mockReturnValue(true);
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
@@ -64,6 +68,10 @@ describe('agent QuickDeploy upload route', () => {
             imageReference: 'registry-svc.registry-and-build.svc.cluster.local:5000/app-1:qd-abc-build-1',
             status: 'UPLOADED',
         });
+    });
+
+    afterEach(async () => {
+        await fs.rm('/tmp/quickstack-upload-route-test', { recursive: true, force: true });
     });
 
     it('requires build:write before reading upload bytes', async () => {
@@ -110,6 +118,50 @@ describe('agent QuickDeploy upload route', () => {
             action: 'AGENT_QUICKDEPLOY_UPLOAD_REQUESTED',
             outcome: 'DENIED',
         }));
+    });
+
+    it('rejects chunked uploads whose declared total exceeds the upload limit', async () => {
+        uploadMocks.getDefaultMaxUploadBytes.mockReturnValue(4);
+        const body = Buffer.from('hello');
+
+        const response = await POST(request(body, metadataFor(body), {
+            'x-quickdeploy-upload-id': 'qd-test-upload-2',
+            'x-quickdeploy-chunk-index': '0',
+            'x-quickdeploy-chunk-count': '1',
+            'x-quickdeploy-total-bytes': String(body.length),
+        }), { params: Promise.resolve({ appId: 'app-1' }) });
+
+        expect(response.status).toBe(413);
+        expect(uploadMocks.acceptUpload).not.toHaveBeenCalled();
+    });
+
+    it('assembles chunked uploads before storing the build', async () => {
+        uploadMocks.getDefaultMaxUploadBytes.mockReturnValue(1024 * 1024 * 1024);
+        const body = Buffer.from('hello chunked world');
+        const metadata = metadataFor(body);
+        const first = body.subarray(0, 7);
+        const second = body.subarray(7);
+        const commonHeaders = {
+            'x-quickdeploy-upload-id': 'qd-test-upload-1',
+            'x-quickdeploy-chunk-count': '2',
+            'x-quickdeploy-total-bytes': String(body.length),
+        };
+
+        const pending = await POST(request(first, metadata, {
+            ...commonHeaders,
+            'x-quickdeploy-chunk-index': '0',
+        }), { params: Promise.resolve({ appId: 'app-1' }) });
+
+        expect(pending.status).toBe(202);
+        expect(uploadMocks.acceptUpload).not.toHaveBeenCalled();
+
+        const complete = await POST(request(second, metadata, {
+            ...commonHeaders,
+            'x-quickdeploy-chunk-index': '1',
+        }), { params: Promise.resolve({ appId: 'app-1' }) });
+
+        expect(complete.status).toBe(200);
+        expect(uploadMocks.acceptUpload).toHaveBeenCalledWith(expect.objectContaining({ body }));
     });
 
     it('rejects app allowlist misses without storing upload bytes', async () => {
