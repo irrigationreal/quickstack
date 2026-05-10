@@ -9,6 +9,8 @@ import { dlog } from '../deployment-logs.service';
 import { BUILD_NAMESPACE } from '../registry.service';
 import { AppBuildMethod } from '@/shared/model/app-source-info.model';
 import appGitSshKeyService from '../app-git-ssh-key.service';
+import dataAccess from '@/server/adapter/db.client';
+import registryService from '../registry.service';
 
 declare global {
     var buildWatchServiceInstance: BuildWatchService | undefined;
@@ -148,6 +150,7 @@ class BuildWatchService {
                 gitCommitMessage,
                 buildMethod ?? (app.buildMethod === 'DOCKERFILE' ? 'DOCKERFILE' : 'RAILPACK'),
             );
+            await this.markQuickDeployBuild(appId, gitCommitHash, 'SUCCEEDED', registryService.createContainerRegistryUrlForAppId(appId, buildJobName));
         } catch (e) {
             console.error(`[BuildWatch] Error triggering deployment for app ${appId}:`, e);
             if (deploymentId) {
@@ -160,6 +163,8 @@ class BuildWatchService {
 
     private async handleFailed(job: V1Job) {
         const deploymentId = job.metadata?.annotations?.[Constants.QS_ANNOTATION_DEPLOYMENT_ID];
+        const appId = job.metadata?.annotations?.[Constants.QS_ANNOTATION_APP_ID];
+        const gitCommitHash = job.metadata?.annotations?.[Constants.QS_ANNOTATION_GIT_COMMIT];
         const buildJobName = job.metadata?.name;
         const gitSshSecretName = job.metadata?.annotations?.[Constants.QS_ANNOTATION_GIT_SSH_SECRET];
         if (!deploymentId) {
@@ -168,10 +173,35 @@ class BuildWatchService {
         }
 
         console.log(`[BuildWatch] Build job ${buildJobName} failed, logging error.`);
+        await this.markQuickDeployBuild(appId, gitCommitHash, 'FAILED');
         await dlog(deploymentId, `*********************`);
         await dlog(deploymentId, ` ⚠ Build job failed. `);
         await dlog(deploymentId, `*********************`);
         await appGitSshKeyService.deleteTemporaryBuildSecret(gitSshSecretName);
+    }
+
+    private async markQuickDeployBuild(appId: string | undefined, contentHash: string | undefined, status: 'SUCCEEDED' | 'FAILED', imageReference?: string) {
+        if (!appId || !contentHash?.startsWith('sha256:')) {
+            return;
+        }
+        const build = await dataAccess.client.quickDeployBuild.findFirst({
+            where: {
+                appId,
+                contentHash,
+                status: { in: ['UPLOADED', 'BUILDING'] },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (!build) {
+            return;
+        }
+        await dataAccess.client.quickDeployBuild.update({
+            where: { id: build.id },
+            data: {
+                status,
+                ...(imageReference ? { imageReference } : {}),
+            },
+        });
     }
 }
 

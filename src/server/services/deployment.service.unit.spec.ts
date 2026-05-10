@@ -171,6 +171,25 @@ describe('deployment.service RuntimeClass support', () => {
         expect(JSON.stringify(body)).not.toContain('runtimeClassName');
     });
 
+    it('treats Kubernetes Status 404 bodies as a missing Deployment', async () => {
+        k3sMocks.readNamespacedDeployment.mockResolvedValue({ body: { kind: 'Status', reason: 'NotFound', code: 404 } });
+
+        await deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: null }));
+
+        expect(k3sMocks.createNamespacedDeployment).toHaveBeenCalled();
+        expect(k3sMocks.replaceNamespacedDeployment).not.toHaveBeenCalled();
+    });
+
+    it('creates the Deployment if a replace races with a Kubernetes 404', async () => {
+        k3sMocks.readNamespacedDeployment.mockResolvedValue({ body: { metadata: { name: 'demo-app' } } });
+        k3sMocks.replaceNamespacedDeployment.mockRejectedValue({ body: { kind: 'Status', reason: 'NotFound', code: 404 } });
+
+        await deploymentService.createDeployment('deployment-1', createApp({ runtimeClassName: null }));
+
+        expect(k3sMocks.replaceNamespacedDeployment).toHaveBeenCalled();
+        expect(k3sMocks.createNamespacedDeployment).toHaveBeenCalled();
+    });
+
     it('fails before applying the Deployment when the RuntimeClass is unavailable', async () => {
         runtimeClassMocks.assertRuntimeClassHealthy.mockRejectedValue(new ServiceException('RuntimeClass "missing" is not available in this cluster.'));
 

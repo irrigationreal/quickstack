@@ -38,7 +38,7 @@ function positionalArgs(args = commandArgs) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg.startsWith('--')) {
-      if (!['--json', '--yes', '--non-interactive', '--no-deploy', '--dry-run'].includes(arg)) index += 1;
+      if (!['--json', '--yes', '--non-interactive', '--no-deploy', '--dry-run', '--force', '--force-build'].includes(arg)) index += 1;
       continue;
     }
     values.push(arg);
@@ -255,6 +255,38 @@ async function sha256File(file) {
   };
 }
 
+function readTarString(block, start, length) {
+  return block.subarray(start, start + length).toString('utf8').replace(/\0.*$/, '').trim();
+}
+
+async function sha256TarContents(file) {
+  const body = await fs.readFile(file);
+  const entries = [];
+  for (let offset = 0; offset + 512 <= body.length; offset += 512) {
+    const block = body.subarray(offset, offset + 512);
+    if (block.every(byte => byte === 0)) break;
+    const name = readTarString(block, 0, 100).replace(/^\.\//, '');
+    const typeFlag = readTarString(block, 156, 1) || '0';
+    const rawMode = readTarString(block, 100, 8).replace(/\0/g, '').trim();
+    const rawSize = readTarString(block, 124, 12).replace(/\0/g, '').trim();
+    const size = rawSize ? Number.parseInt(rawSize, 8) : 0;
+    const mode = rawMode ? Number.parseInt(rawMode, 8) : 0;
+    const bodyStart = offset + 512;
+    const bodyEnd = bodyStart + size;
+    if ((typeFlag === '0' || typeFlag === '') && name) {
+      entries.push({ name, mode, body: body.subarray(bodyStart, bodyEnd) });
+    }
+    offset += Math.ceil(size / 512) * 512;
+  }
+  const hash = crypto.createHash('sha256');
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    hash.update(`${entry.name}\0${entry.mode}\0${entry.body.length}\0`);
+    hash.update(entry.body);
+    hash.update('\0');
+  }
+  return `sha256:${hash.digest('hex')}`;
+}
+
 function serviceForLaunch(detection) {
   const serviceRoot = optionValue('--service-root');
   if (serviceRoot) {
@@ -263,6 +295,13 @@ function serviceForLaunch(detection) {
     return service;
   }
   return detection.deployableServices?.[0];
+}
+
+async function dockerignoreTarArgs(servicePath) {
+  const dockerignorePath = path.join(servicePath, '.dockerignore');
+  const dockerignore = await fs.readFile(dockerignorePath, 'utf8').catch(() => '');
+  if (!dockerignore.trim()) return [];
+  return ['--exclude-from', dockerignorePath];
 }
 
 async function packageManagedSource(root, service) {
@@ -275,10 +314,10 @@ async function packageManagedSource(root, service) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'quickstack-launch-'));
   const tarPath = path.join(tmpRoot, 'source.tar');
   try {
-    const excludes = ['.git', '.quickdeploy', 'node_modules', '.next', 'dist', 'build', 'coverage']
-      .flatMap(name => ['--exclude', name]);
-    runChecked('tar', ['-C', servicePath, ...excludes, '-cf', tarPath, '.']);
-    return { mode, tarPath, artifactType: 'source-tar', ...(await sha256File(tarPath)) };
+    const dockerignoreArgs = await dockerignoreTarArgs(servicePath);
+    runChecked('tar', ['-C', servicePath, ...dockerignoreArgs, '-cf', tarPath, '.']);
+    const fileHash = await sha256File(tarPath);
+    return { mode, tarPath, artifactType: 'source-tar', ...fileHash, sourceContentHash: await sha256TarContents(tarPath) };
   } catch (error) {
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => undefined);
     throw error;
@@ -368,7 +407,7 @@ async function commandLaunch() {
       mode: image ? 'image' : managedBuild.mode,
       port,
       domain: { mode: customHostname ? 'custom' : 'generated', hostname: ensured.hostname, url: ensured.url },
-        image: image ? { managed: false, reference: image } : { managed: true, reference: uploadedBuild.imageReference, buildId: uploadedBuild.buildId, contentHash: managedBuild.contentHash, artifactType: managedBuild.artifactType },
+      image: image ? { managed: false, reference: image } : { managed: true, reference: uploadedBuild.imageReference, buildId: uploadedBuild.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType },
       publicEndpoints: reservedEndpoints.map(endpoint => ({ id: endpoint.id, publicIp: endpoint.publicIp, publicPort: endpoint.publicPort, targetPort: endpoint.targetPort, protocol: endpoint.protocol, status: endpoint.status })),
       updatedAt: new Date().toISOString(),
     };
@@ -398,30 +437,38 @@ async function commandDeploy() {
   }
   await ensureCredentialsForApi();
   let updatedApp = selected;
+  let result = null;
+  let sourceChanged = selected.mode === 'image';
+  const forceBuild = hasFlag('--force') || hasFlag('--force-build');
   if (selected.mode !== 'image') {
     const detection = helper('detect.mjs', [root], { parseJson: true });
     const service = detection.deployableServices?.find(item => item.root === selected.serviceRoot) || { root: selected.serviceRoot, mode: selected.mode };
     const managedBuild = await packageManagedSource(root, service);
     try {
-      const upload = api('upload', [selected.appId, managedBuild.tarPath, JSON.stringify({
-        projectId: selected.projectId,
-        mode: managedBuild.mode,
-        artifactType: managedBuild.artifactType,
-        contentHash: managedBuild.contentHash,
-        uploadBytes: managedBuild.uploadBytes,
-        dockerfilePath: service?.dockerfile || './Dockerfile',
-      })]);
-      updatedApp = {
-        ...selected,
-        image: { managed: true, reference: upload.imageReference, buildId: upload.buildId, contentHash: managedBuild.contentHash, artifactType: managedBuild.artifactType },
-        updatedAt: new Date().toISOString(),
-      };
-      await writeJson(path.join(root, '.quickdeploy', 'apps', `${selected.appId}.json`), updatedApp);
+      sourceChanged = managedBuild.sourceContentHash !== (selected.image?.sourceContentHash || selected.image?.contentHash);
+      if (sourceChanged || forceBuild) {
+        const upload = api('upload', [selected.appId, managedBuild.tarPath, JSON.stringify({
+          projectId: selected.projectId,
+          mode: managedBuild.mode,
+          artifactType: managedBuild.artifactType,
+          contentHash: managedBuild.contentHash,
+          uploadBytes: managedBuild.uploadBytes,
+          dockerfilePath: service?.dockerfile || './Dockerfile',
+        })]);
+        updatedApp = {
+          ...selected,
+          image: { managed: true, reference: upload.imageReference, buildId: upload.buildId, contentHash: managedBuild.contentHash, sourceContentHash: managedBuild.sourceContentHash, uploadBytes: managedBuild.uploadBytes, artifactType: managedBuild.artifactType },
+          updatedAt: new Date().toISOString(),
+        };
+        await writeJson(path.join(root, '.quickdeploy', 'apps', `${selected.appId}.json`), updatedApp);
+      }
     } finally {
       await fs.rm(path.dirname(managedBuild.tarPath), { recursive: true, force: true }).catch(() => undefined);
     }
   }
-  const result = api('deploy', [selected.appId]);
+  if (sourceChanged || forceBuild || endpointSpecs.length > 0) {
+    result = sourceChanged || forceBuild ? api('deploy', [selected.appId]) : null;
+  }
   const reservedEndpoints = await reserveEndpointSpecs(selected.appId, endpointSpecs);
   if (reservedEndpoints.length > 0) {
     updatedApp = {
@@ -431,7 +478,12 @@ async function commandDeploy() {
     };
     await writeJson(path.join(root, '.quickdeploy', 'apps', `${selected.appId}.json`), updatedApp);
   }
-  emit('success', { message: `Deployment requested for ${selected.name || selected.appId}.`, deployment: result, app: updatedApp, publicEndpoints: reservedEndpoints });
+  const message = result
+    ? `Deployment requested for ${selected.name || selected.appId}.`
+    : reservedEndpoints.length > 0
+      ? `No source changes detected for ${selected.name || selected.appId}; endpoint reservations updated.`
+      : `No source changes detected for ${selected.name || selected.appId}; nothing to deploy.`;
+  emit('success', { message, deployment: result, app: updatedApp, publicEndpoints: reservedEndpoints, skipped: !result });
 }
 
 function parseDotenv(text) {

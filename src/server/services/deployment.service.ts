@@ -31,6 +31,19 @@ type ResolvedRuntimeClass = {
     source: 'APP_OVERRIDE' | 'SERVER_DEFAULT' | 'NONE';
 };
 
+function isKubernetesNotFound(error: any) {
+    return error?.response?.statusCode === 404
+        || error?.response?.status === 404
+        || error?.statusCode === 404
+        || error?.status === 404
+        || error?.code === 404
+        || error?.body?.code === 404;
+}
+
+function isKubernetesStatusNotFound(body: any) {
+    return body?.kind === 'Status' && (body?.code === 404 || body?.reason === 'NotFound');
+}
+
 class DeploymentService {
 
     async resolveRuntimeClassForApp(app: AppExtendedModel): Promise<ResolvedRuntimeClass> {
@@ -50,9 +63,9 @@ class DeploymentService {
     async getDeployment(namespace: string, appName: string): Promise<V1Deployment | undefined> {
         try {
             const res = await k3s.apps.readNamespacedDeployment(appName, namespace) as { body: V1Deployment };
-            return res.body;
+            return isKubernetesStatusNotFound(res.body) ? undefined : res.body;
         } catch (error: any) {
-            if (error?.response?.statusCode === 404 || error?.response?.status === 404 || error?.statusCode === 404 || error?.status === 404) {
+            if (isKubernetesNotFound(error)) {
                 return undefined;
             }
             throw error;
@@ -322,10 +335,18 @@ class DeploymentService {
 
         if (existingDeployment) {
             dlog(deploymentId, `Replacing existing deployment...`);
-            const res = await k3s.apps.replaceNamespacedDeployment(app.id, app.projectId, body);
+            try {
+                await k3s.apps.replaceNamespacedDeployment(app.id, app.projectId, body);
+            } catch (error) {
+                if (!isKubernetesNotFound(error)) {
+                    throw error;
+                }
+                dlog(deploymentId, `Existing deployment disappeared before replace; creating deployment...`);
+                await k3s.apps.createNamespacedDeployment(app.projectId, body);
+            }
         } else {
             dlog(deploymentId, `Creating deployment...`);
-            const res = await k3s.apps.createNamespacedDeployment(app.projectId, body);
+            await k3s.apps.createNamespacedDeployment(app.projectId, body);
         }
         dlog(deploymentId, `Cleanup unused ressources from previous deployments...`);
         await configMapService.deleteUnusedConfigMaps(app);

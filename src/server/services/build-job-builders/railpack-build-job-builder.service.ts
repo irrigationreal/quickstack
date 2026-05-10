@@ -19,6 +19,7 @@ class RailpackBuildJobBuilder implements BuildJobBuilder {
     readonly buildMethod: AppBuildMethod = 'RAILPACK';
 
     async buildJobDefinition(ctx: BuildJobBuilderContext): Promise<V1Job> {
+        const cacheReference = registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, 'buildcache');
         const buildkitArgs = [
             "build",
             "--local",
@@ -29,6 +30,10 @@ class RailpackBuildJobBuilder implements BuildJobBuilder {
             "gateway.v0",
             "--opt",
             `source=${RAILPACK_FRONTEND_IMAGE}`,
+            "--import-cache",
+            `type=registry,ref=${cacheReference},registry.insecure=true`,
+            "--export-cache",
+            `type=registry,ref=${cacheReference},mode=max,registry.insecure=true`,
             "--output",
             `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, ctx.buildName)},push=true,registry.insecure=true`
         ];

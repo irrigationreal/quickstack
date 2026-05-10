@@ -17,6 +17,7 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
         const contextPaths = PathUtils.splitPath(ctx.app.dockerfilePath || './Dockerfile');
         const dockerfileContextPath = this.getDockerfileContextPath(contextPaths.folderPath);
 
+        const cacheReference = registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, 'buildcache');
         const buildkitArgs = [
             "build",
             "--frontend",
@@ -27,6 +28,10 @@ class DockerfileBuildJobBuilder implements BuildJobBuilder {
             `dockerfile=${dockerfileContextPath}`,
             "--opt",
             `filename=${contextPaths.filePath}`,
+            "--import-cache",
+            `type=registry,ref=${cacheReference},registry.insecure=true`,
+            "--export-cache",
+            `type=registry,ref=${cacheReference},mode=max,registry.insecure=true`,
             "--output",
             `type=image,name=${registryService.createInternalContainerRegistryUrlForAppId(ctx.app.id, ctx.buildName)},push=true,registry.insecure=true`
         ];
