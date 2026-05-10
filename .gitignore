@@ -45,3 +45,4 @@ internal
 dist
 storage/
 security-audit-results.tsv
+agent_ergonomics_audit/

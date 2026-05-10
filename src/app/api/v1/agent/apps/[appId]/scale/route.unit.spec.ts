@@ -47,7 +47,7 @@ describe('agent app scale route', () => {
         apiKeyMocks.hasScope.mockReturnValue(true);
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
         authMocks.assertSessionCanWriteApp.mockReturnValue(authenticated.session);
-        appMocks.getById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App' });
+        appMocks.getById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App', replicas: 1 });
         dataAccessMocks.appUpdate.mockResolvedValue({ id: 'app-1', replicas: 2 });
         deploymentMocks.setReplicasForDeployment.mockResolvedValue({ body: { status: { readyReplicas: 1 } } });
     });
@@ -64,6 +64,26 @@ describe('agent app scale route', () => {
         expect(deploymentMocks.setReplicasForDeployment).toHaveBeenCalledWith('proj-1', 'app-1', 2);
         expect(json.replicas).toBe(2);
         expect(json.readyReplicas).toBe(1);
+    });
+
+    it('does not persist the desired replica count if Kubernetes scaling fails', async () => {
+        deploymentMocks.setReplicasForDeployment.mockRejectedValue(new Error('kubernetes unavailable'));
+
+        await expect(POST(request({ replicas: 2 }), { params: Promise.resolve({ appId: 'app-1' }) }))
+            .rejects
+            .toThrow('kubernetes unavailable');
+
+        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
+    });
+
+    it('skips the database write when the stored desired replica count is unchanged', async () => {
+        appMocks.getById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App', replicas: 2 });
+
+        const response = await POST(request({ replicas: 2 }), { params: Promise.resolve({ appId: 'app-1' }) });
+
+        expect(response.status).toBe(200);
+        expect(deploymentMocks.setReplicasForDeployment).toHaveBeenCalledWith('proj-1', 'app-1', 2);
+        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
     });
 
     it('rejects scale requests without deploy write scope', async () => {

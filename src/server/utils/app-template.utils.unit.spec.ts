@@ -51,16 +51,6 @@ describe('AppTemplateService', () => {
             expect(inputValues[0].value).toBe('existingValue');
         });
 
-        vi.mock('crypto', () => ({
-            default: {
-                randomBytes: vi.fn(() => ({
-                    toString: vi.fn(() => 'mockedRandomValue')
-                }))
-            }
-        }));
-
-
-
         describe('mapTemplateInputValuesToApp', () => {
             it('should map template input values to app model', () => {
                 const appTemplate: any = {
@@ -143,6 +133,7 @@ describe('AppTemplateService', () => {
 
                 const databaseModel = AppTemplateUtils.getDatabaseModelFromApp(app);
 
+                expect(databaseModel.username).toBe('default');
                 expect(databaseModel.internalConnectionUrl).toBe(`redis://default:pa%20ss%25word%5D%24@${KubeObjectNameUtils.toServiceName('redis-app-id')}:6379`);
             });
 

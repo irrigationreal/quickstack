@@ -66,13 +66,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
     const readyReplicas = deployment?.status?.readyReplicas ?? 0;
     const runningPods = pods.filter(pod => pod.status === 'Running').length;
     const liveImage = deployment?.spec?.template?.spec?.containers?.[0]?.image ?? app.containerImageSource;
+    const currentReplicas = deployment?.status?.replicas ?? 0;
     const health = !deployment
         ? 'missing'
-        : desiredReplicas > 0 && readyReplicas >= desiredReplicas
-            ? 'healthy'
-            : readyReplicas > 0 || runningPods > 0
-                ? 'degraded'
-                : 'unhealthy';
+        : desiredReplicas === 0
+            ? currentReplicas === 0 && runningPods === 0 ? 'healthy' : 'degraded'
+            : readyReplicas >= desiredReplicas
+                ? 'healthy'
+                : readyReplicas > 0 || runningPods > 0
+                    ? 'degraded'
+                    : 'unhealthy';
 
     await auditService.recordBestEffort({
         ...authenticated.auditActor,
@@ -101,7 +104,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
         health,
         replicas: {
             desired: desiredReplicas,
-            current: deployment?.status?.replicas ?? 0,
+            current: currentReplicas,
             ready: readyReplicas,
             updated: deployment?.status?.updatedReplicas ?? 0,
             unavailable: deployment?.status?.unavailableReplicas ?? 0,

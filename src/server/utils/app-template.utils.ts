@@ -155,7 +155,7 @@ export class AppTemplateUtils {
             }
             returnVal = {
                 databaseName: '',
-                username: '',
+                username: password ? 'default' : '',
                 password,
                 port,
                 hostname,

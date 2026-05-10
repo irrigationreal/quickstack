@@ -61,11 +61,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         return NextResponse.json({ status: 'error', message: 'Invalid scale payload.' }, { status: 400 });
     }
 
-    await dataAccess.client.app.update({
-        where: { id: app.id },
-        data: { replicas: parsed.data.replicas },
-    });
     const deployment = await deploymentService.setReplicasForDeployment(app.projectId, app.id, parsed.data.replicas);
+    if (app.replicas !== parsed.data.replicas) {
+        await dataAccess.client.app.update({
+            where: { id: app.id },
+            data: { replicas: parsed.data.replicas },
+        });
+    }
 
     await auditService.recordBestEffort({
         ...authenticated.auditActor,

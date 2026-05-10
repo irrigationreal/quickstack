@@ -75,6 +75,59 @@ describe('agent app status route', () => {
         expect(json.replicas.ready).toBe(2);
     });
 
+    it('reports scale-to-zero Deployments as healthy after pods are gone', async () => {
+        appMocks.getExtendedById.mockResolvedValue({
+            id: 'app-1',
+            name: 'Demo App',
+            projectId: 'proj-1',
+            sourceType: 'QUICKDEPLOY_UPLOAD',
+            buildMethod: 'DOCKERFILE',
+            replicas: 0,
+            containerImageSource: 'registry.invalid/quickstack-managed-pending:latest',
+            appPorts: [],
+            appDomains: [],
+        });
+        deploymentMocks.getDeployment.mockResolvedValue({
+            metadata: { name: 'app-1', namespace: 'proj-1' },
+            spec: { template: { spec: { containers: [{ image: 'registry.internal/app-1:built' }] } } },
+            status: { replicas: 0, readyReplicas: 0, updatedReplicas: 0, unavailableReplicas: 0, conditions: [] },
+        });
+        podMocks.getPodsForApp.mockResolvedValue([]);
+
+        const response = await GET(request(), { params: Promise.resolve({ appId: 'app-1' }) });
+        const json = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(json.health).toBe('healthy');
+        expect(json.replicas).toEqual(expect.objectContaining({ desired: 0, current: 0, ready: 0 }));
+    });
+
+    it('reports scale-to-zero Deployments as degraded while old pods are still terminating', async () => {
+        appMocks.getExtendedById.mockResolvedValue({
+            id: 'app-1',
+            name: 'Demo App',
+            projectId: 'proj-1',
+            sourceType: 'QUICKDEPLOY_UPLOAD',
+            buildMethod: 'DOCKERFILE',
+            replicas: 0,
+            containerImageSource: 'registry.invalid/quickstack-managed-pending:latest',
+            appPorts: [],
+            appDomains: [],
+        });
+        deploymentMocks.getDeployment.mockResolvedValue({
+            metadata: { name: 'app-1', namespace: 'proj-1' },
+            spec: { template: { spec: { containers: [{ image: 'registry.internal/app-1:built' }] } } },
+            status: { replicas: 1, readyReplicas: 0, updatedReplicas: 0, unavailableReplicas: 1, conditions: [] },
+        });
+        podMocks.getPodsForApp.mockResolvedValue([{ podName: 'pod-1', status: 'Running' }]);
+
+        const response = await GET(request(), { params: Promise.resolve({ appId: 'app-1' }) });
+        const json = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(json.health).toBe('degraded');
+    });
+
     it('falls back to the app image when the Deployment is missing', async () => {
         deploymentMocks.getDeployment.mockRejectedValue(new Error('missing'));
 

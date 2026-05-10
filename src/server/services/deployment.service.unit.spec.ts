@@ -1,4 +1,5 @@
 const k3sMocks = vi.hoisted(() => ({
+    readNamespacedDeployment: vi.fn(),
     listNamespacedDeployment: vi.fn(),
     createNamespacedDeployment: vi.fn(),
     replaceNamespacedDeployment: vi.fn(),
@@ -22,6 +23,7 @@ const secretMocks = vi.hoisted(() => ({
 vi.mock('@/server/adapter/kubernetes-api.adapter', () => ({
     default: {
         apps: {
+            readNamespacedDeployment: k3sMocks.readNamespacedDeployment,
             listNamespacedDeployment: k3sMocks.listNamespacedDeployment,
             createNamespacedDeployment: k3sMocks.createNamespacedDeployment,
             replaceNamespacedDeployment: k3sMocks.replaceNamespacedDeployment,
@@ -107,6 +109,7 @@ import { ServiceException } from '@/shared/model/service.exception.model';
 describe('deployment.service RuntimeClass support', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        k3sMocks.readNamespacedDeployment.mockRejectedValue({ response: { statusCode: 404 } });
         k3sMocks.listNamespacedDeployment.mockResolvedValue({ body: { items: [] } });
         runtimeClassMocks.assertRuntimeClassHealthy.mockResolvedValue({ runtimeClassName: 'kata', healthy: true, checkedAt: new Date(), nodeName: 'node-1', runtimeProof: 'kata', message: 'ok', nodes: [{ nodeName: 'node-1', healthy: true, runtimeProof: 'kata', podPhase: 'Running', message: 'ok' }] });
         runtimeClassMocks.isKataRuntimeClass.mockImplementation((name: string) => /kata/i.test(name));

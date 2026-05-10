@@ -48,10 +48,14 @@ class DeploymentService {
     }
 
     async getDeployment(namespace: string, appName: string): Promise<V1Deployment | undefined> {
-        const allDeployments = await k3s.apps.listNamespacedDeployment(namespace) as { body: V1DeploymentList };
-        if (allDeployments.body?.items?.some((item) => item.metadata?.name === appName)) {
+        try {
             const res = await k3s.apps.readNamespacedDeployment(appName, namespace) as { body: V1Deployment };
             return res.body;
+        } catch (error: any) {
+            if (error?.response?.statusCode === 404 || error?.response?.status === 404 || error?.statusCode === 404 || error?.status === 404) {
+                return undefined;
+            }
+            throw error;
         }
     }
 
