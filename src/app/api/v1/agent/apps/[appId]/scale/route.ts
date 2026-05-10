@@ -1,7 +1,6 @@
 import apiKeyService from "@/server/services/api-key.service";
 import appService from "@/server/services/app.service";
 import auditService from "@/server/services/audit.service";
-import dataAccess from "@/server/adapter/db.client";
 import deploymentService from "@/server/services/deployment.service";
 import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
 import { NextResponse } from "next/server";
@@ -63,10 +62,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
 
     const deployment = await deploymentService.setReplicasForDeployment(app.projectId, app.id, parsed.data.replicas);
     if (app.replicas !== parsed.data.replicas) {
-        await dataAccess.client.app.update({
-            where: { id: app.id },
-            data: { replicas: parsed.data.replicas },
-        });
+        await appService.save({
+            id: app.id,
+            replicas: parsed.data.replicas,
+        }, false);
     }
 
     await auditService.recordBestEffort({

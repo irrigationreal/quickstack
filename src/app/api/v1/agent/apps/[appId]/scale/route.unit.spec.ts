@@ -3,27 +3,16 @@ const apiKeyMocks = vi.hoisted(() => ({
     hasScope: vi.fn(),
     isAllowedForApp: vi.fn(),
 }));
-const appMocks = vi.hoisted(() => ({ getById: vi.fn() }));
+const appMocks = vi.hoisted(() => ({ getById: vi.fn(), save: vi.fn() }));
 const auditMocks = vi.hoisted(() => ({ recordBestEffort: vi.fn() }));
 const authMocks = vi.hoisted(() => ({ assertSessionCanWriteApp: vi.fn() }));
 const deploymentMocks = vi.hoisted(() => ({ setReplicasForDeployment: vi.fn() }));
-const dataAccessMocks = vi.hoisted(() => ({ appUpdate: vi.fn() }));
 
 vi.mock('@/server/services/api-key.service', () => ({ default: apiKeyMocks }));
 vi.mock('@/server/services/app.service', () => ({ default: appMocks }));
 vi.mock('@/server/services/audit.service', () => ({ default: auditMocks }));
 vi.mock('@/server/services/deployment.service', () => ({ default: deploymentMocks }));
 vi.mock('@/server/utils/action-wrapper.utils', () => ({ assertSessionCanWriteApp: authMocks.assertSessionCanWriteApp }));
-vi.mock('@/server/adapter/db.client', () => ({
-    default: {
-        client: {
-            app: {
-                update: dataAccessMocks.appUpdate,
-            },
-        },
-    },
-}));
-
 import { POST } from './route';
 
 function request(body: Record<string, unknown>) {
@@ -48,7 +37,7 @@ describe('agent app scale route', () => {
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
         authMocks.assertSessionCanWriteApp.mockReturnValue(authenticated.session);
         appMocks.getById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App', replicas: 1 });
-        dataAccessMocks.appUpdate.mockResolvedValue({ id: 'app-1', replicas: 2 });
+        appMocks.save.mockResolvedValue({ id: 'app-1', replicas: 2 });
         deploymentMocks.setReplicasForDeployment.mockResolvedValue({ body: { status: { readyReplicas: 1 } } });
     });
 
@@ -57,11 +46,8 @@ describe('agent app scale route', () => {
         const json = await response.json();
 
         expect(response.status).toBe(200);
-        expect(dataAccessMocks.appUpdate).toHaveBeenCalledWith({
-            where: { id: 'app-1' },
-            data: { replicas: 2 },
-        });
         expect(deploymentMocks.setReplicasForDeployment).toHaveBeenCalledWith('proj-1', 'app-1', 2);
+        expect(appMocks.save).toHaveBeenCalledWith({ id: 'app-1', replicas: 2 }, false);
         expect(json.replicas).toBe(2);
         expect(json.readyReplicas).toBe(1);
     });
@@ -73,7 +59,7 @@ describe('agent app scale route', () => {
             .rejects
             .toThrow('kubernetes unavailable');
 
-        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
+        expect(appMocks.save).not.toHaveBeenCalled();
     });
 
     it('skips the database write when the stored desired replica count is unchanged', async () => {
@@ -83,7 +69,7 @@ describe('agent app scale route', () => {
 
         expect(response.status).toBe(200);
         expect(deploymentMocks.setReplicasForDeployment).toHaveBeenCalledWith('proj-1', 'app-1', 2);
-        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
+        expect(appMocks.save).not.toHaveBeenCalled();
     });
 
     it('rejects scale requests without deploy write scope', async () => {
@@ -92,7 +78,7 @@ describe('agent app scale route', () => {
         const response = await POST(request({ replicas: 2 }), { params: Promise.resolve({ appId: 'app-1' }) });
 
         expect(response.status).toBe(403);
-        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
+        expect(appMocks.save).not.toHaveBeenCalled();
         expect(deploymentMocks.setReplicasForDeployment).not.toHaveBeenCalled();
     });
 
@@ -100,7 +86,7 @@ describe('agent app scale route', () => {
         const response = await POST(request({ replicas: -1 }), { params: Promise.resolve({ appId: 'app-1' }) });
 
         expect(response.status).toBe(400);
-        expect(dataAccessMocks.appUpdate).not.toHaveBeenCalled();
+        expect(appMocks.save).not.toHaveBeenCalled();
         expect(deploymentMocks.setReplicasForDeployment).not.toHaveBeenCalled();
     });
 });
