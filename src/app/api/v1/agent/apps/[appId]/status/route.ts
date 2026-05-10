@@ -65,6 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
     const desiredReplicas = app.replicas ?? 0;
     const readyReplicas = deployment?.status?.readyReplicas ?? 0;
     const runningPods = pods.filter(pod => pod.status === 'Running').length;
+    const liveImage = deployment?.spec?.template?.spec?.containers?.[0]?.image ?? app.containerImageSource;
     const health = !deployment
         ? 'missing'
         : desiredReplicas > 0 && readyReplicas >= desiredReplicas
@@ -93,7 +94,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
             sourceType: app.sourceType,
             buildMethod: app.buildMethod,
             replicas: app.replicas,
-            image: app.containerImageSource,
+            image: liveImage,
             ports: app.appPorts.map(port => ({ id: port.id, port: port.port })),
             domains: app.appDomains.map(domain => ({ id: domain.id, hostname: domain.hostname, port: domain.port, url: `https://${domain.hostname}` })),
         },
