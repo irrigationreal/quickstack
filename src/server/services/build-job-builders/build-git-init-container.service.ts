@@ -24,11 +24,11 @@ class BuildGitInitContainerService {
             'git clone --depth 1 --single-branch --branch "$GIT_BRANCH" "$GIT_URL" "$SOURCE_PATH"',
             'cd "$SOURCE_PATH"',
             'if ! git cat-file -e "$GIT_COMMIT^{commit}" 2>/dev/null; then',
-            '  echo "Commit $GIT_COMMIT not found in shallow clone. Fetching commit directly."',
+            '  echo "Commit $GIT_COMMIT is not in the shallow clone. Fetching it directly."',
             '  git fetch --depth 1 origin "$GIT_COMMIT"',
             'fi',
             'git checkout --detach "$GIT_COMMIT"',
-            'echo "Successfully checked out git commit: $(git rev-parse HEAD)"',
+            'echo "Checked out git commit $(git rev-parse HEAD)"',
         ].filter(Boolean).join('\n');
 
         return {
@@ -85,17 +85,12 @@ class BuildGitInitContainerService {
             'if [ "$QUICKSTACK_GENERATED_STATIC_DOCKERFILE" = "true" ]; then',
             '  mkdir -p "$SOURCE_PATH/.quickstack"',
             '  cat > "$SOURCE_PATH/.quickstack/generated-static.Dockerfile" <<\'QUICKSTACK_STATIC_DOCKERFILE\'',
-            'FROM node:22-alpine AS build',
-            'WORKDIR /app',
-            'COPY . .',
-            'RUN corepack enable || true',
-            'RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm run build; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile && yarn build; elif [ -f package-lock.json ]; then npm ci && npm run build; else npm install && npm run build; fi',
-            'RUN mkdir -p /quickstack-static && for dir in dist build out; do if [ -d "$dir" ]; then cp -a "$dir"/. /quickstack-static/; exit 0; fi; done; echo "No static output directory found. Expected dist, build, or out." >&2; exit 1',
             'FROM nginx:1.27-alpine',
-            'COPY --from=build /quickstack-static /usr/share/nginx/html',
+            'COPY . /usr/share/nginx/html',
+            'RUN rm -rf /usr/share/nginx/html/.quickstack',
             'QUICKSTACK_STATIC_DOCKERFILE',
             'fi',
-            'echo "Successfully unpacked QuickDeploy source upload $QUICKDEPLOY_BUILD_ID"',
+            'echo "Unpacked QuickDeploy archive $QUICKDEPLOY_BUILD_ID"',
         ].join('\n');
 
         return {

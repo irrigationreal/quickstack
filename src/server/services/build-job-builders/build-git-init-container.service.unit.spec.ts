@@ -37,7 +37,7 @@ describe('BuildGitInitContainerService', () => {
         expect(script).toContain('git checkout --detach "$GIT_COMMIT"');
     });
 
-    it('generates a static Dockerfile for uploaded static source builds', () => {
+    it('generates a static Dockerfile for uploaded static-output QuickDeploy archives', () => {
         const container = buildGitInitContainerService.getInitContainer({
             app: {
                 id: 'app-1',
@@ -60,9 +60,12 @@ describe('BuildGitInitContainerService', () => {
         ]));
         const script = container.args?.[0] ?? '';
         expect(script).toContain('generated-static.Dockerfile');
-        expect(script).toContain('FROM node:22-alpine AS build');
         expect(script).toContain('FROM nginx:1.27-alpine');
-        expect(script).toContain('No static output directory found');
+        expect(script).toContain('COPY . /usr/share/nginx/html');
+        expect(script).toContain('RUN rm -rf /usr/share/nginx/html/.quickstack');
+        expect(script).toContain('Unpacked QuickDeploy archive');
+        expect(script).not.toContain('source upload');
+        expect(script).not.toContain('npm install');
     });
 
     it('mounts an SSH key secret and configures GIT_SSH_COMMAND for SSH auth', () => {

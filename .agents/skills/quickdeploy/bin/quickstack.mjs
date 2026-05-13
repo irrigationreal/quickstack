@@ -141,6 +141,23 @@ function api(commandName, args, { parseJson = true } = {}) {
   return helper('quickstack-api.mjs', [commandName, ...args], { parseJson });
 }
 
+function quickdeployArchiveSummary(packageInfo) {
+  if (!packageInfo) return '';
+  const sizeSummary = `${formatBytes(packageInfo.uploadBytes)} across ${packageInfo.fileCount} files`;
+  if (packageInfo.mode === 'static') {
+    return `Packaged QuickDeploy archive from built output was ${sizeSummary}. Large files in the build output are included by default. Reduce the build output, or use --output-dir to point at a different output directory.`;
+  }
+  return `Packaged QuickDeploy source archive was ${sizeSummary}. Large files are included by default; use --service-root to narrow the upload scope, or list exclusions in .quickdeployignore for files that are not needed at build or runtime.`;
+}
+
+function quickdeployLargeArchiveWarning(mode, uploadBytes, fileCount, largestFiles) {
+  const sizeSummary = `${formatBytes(uploadBytes)} across ${fileCount} files`;
+  if (mode === 'static') {
+    return `QuickDeploy archive from built output is ${sizeSummary}. Large files in the build output are included by default. Reduce the build output, or use --output-dir to point at a different output directory. Largest files: ${largestFiles || 'none'}.`;
+  }
+  return `QuickDeploy source archive is ${sizeSummary}. Large files are included by default because they may be needed at build or runtime. Use --service-root to narrow the upload scope, or list exclusions in .quickdeployignore. Largest files: ${largestFiles || 'none'}.`;
+}
+
 function apiUpload(appId, tarPath, metadata, packageInfo) {
   const result = spawnSync(process.execPath, [path.join(skillRoot, 'scripts', 'quickstack-api.mjs'), 'upload', appId, tarPath, JSON.stringify(metadata)], {
     encoding: 'utf8',
@@ -148,9 +165,7 @@ function apiUpload(appId, tarPath, metadata, packageInfo) {
   });
   if (result.status !== 0) {
     const message = (result.stderr || result.stdout || 'upload failed').trim();
-    const packageContext = packageInfo
-      ? ` Packaged source was ${formatBytes(packageInfo.uploadBytes)} across ${packageInfo.fileCount} files. Large files are included by default; narrow --service-root or add explicit .quickdeployignore rules only for files that are not deploy inputs.`
-      : '';
+    const packageContext = packageInfo ? ` ${quickdeployArchiveSummary(packageInfo)}` : '';
     die(`${message}${packageContext}`, result.status || 1, { warnings: packageInfo?.warnings || [] });
   }
   try {
@@ -259,6 +274,22 @@ function runChecked(commandName, args, options = {}) {
   }
 }
 
+function runShellChecked(commandLine, options = {}) {
+  const result = spawnSync(commandLine, [], {
+    stdio: jsonOutput ? 'pipe' : 'inherit',
+    encoding: jsonOutput ? 'utf8' : undefined,
+    shell: true,
+    ...options,
+  });
+  if (jsonOutput) {
+    if (result.stdout) process.stderr.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  }
+  if (result.status !== 0) {
+    die(`${commandLine} failed.`, result.status || 1);
+  }
+}
+
 async function sha256File(file) {
   const hash = crypto.createHash('sha256');
   await new Promise((resolve, reject) => {
@@ -342,24 +373,62 @@ async function quickdeployIgnoreTarArgs(servicePath) {
   return ['--exclude-from', ignorePath];
 }
 
+async function findStaticOutputDir(servicePath, service) {
+  const candidates = [optionValue('--output-dir'), ...(service?.outputs || []), 'dist', 'build', 'out']
+    .filter(Boolean)
+    .map(candidate => path.resolve(servicePath, candidate));
+  for (const candidate of candidates) {
+    const stat = await fs.stat(candidate).catch(() => null);
+    if (stat?.isDirectory()) return candidate;
+  }
+  die('Static build did not produce an output directory. Pass --output-dir <dir> or write the build output to dist, build, or out.');
+}
+
+async function writeGeneratedStaticDockerfile(root) {
+  const dockerfilePath = path.join(root, '.quickstack', 'generated-static.Dockerfile');
+  await fs.mkdir(path.dirname(dockerfilePath), { recursive: true });
+  await fs.writeFile(dockerfilePath, [
+    'FROM nginx:1.27-alpine',
+    'COPY . /usr/share/nginx/html',
+    'RUN rm -rf /usr/share/nginx/html/.quickstack',
+    '',
+  ].join('\n'));
+}
+
+async function packageStaticBuildOutput(root, service, tmpRoot) {
+  const servicePath = path.join(root, service?.root || '.');
+  if (!service?.buildCommand) {
+    die('Static deploys need a build command. Add a package.json build script or deploy with --image.');
+  }
+  runShellChecked(service.buildCommand, { cwd: servicePath });
+
+  const outputDir = await findStaticOutputDir(servicePath, service);
+  const staticRoot = path.join(tmpRoot, 'static-output');
+  await fs.mkdir(staticRoot, { recursive: true });
+  await fs.cp(outputDir, staticRoot, { recursive: true, dereference: true });
+  await writeGeneratedStaticDockerfile(staticRoot);
+  return staticRoot;
+}
+
 async function packageManagedSource(root, service) {
   const servicePath = path.join(root, service?.root || '.');
   const mode = service?.mode === 'dockerfile' ? 'dockerfile' : service?.mode === 'static-candidate' ? 'static' : undefined;
   if (!mode) {
-    die('QuickStack managed launch currently supports Dockerfile projects and static frontend build outputs. Pass --image for other app servers.', 2, { service });
+    die('QuickStack managed build supports Dockerfile projects and static frontends. For other runtimes, build an image externally and pass --image.', 2, { service });
   }
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'quickstack-launch-'));
   const tarPath = path.join(tmpRoot, 'source.tar');
   try {
-    const ignoreArgs = await quickdeployIgnoreTarArgs(servicePath);
-    runChecked('tar', ['-C', servicePath, ...ignoreArgs, '-cf', tarPath, '.']);
+    const packageRoot = mode === 'static' ? await packageStaticBuildOutput(root, service, tmpRoot) : servicePath;
+    const ignoreArgs = mode === 'dockerfile' ? await quickdeployIgnoreTarArgs(servicePath) : [];
+    runChecked('tar', ['-C', packageRoot, ...ignoreArgs, '-cf', tarPath, '.']);
     const fileHash = await sha256File(tarPath);
     const tarAnalysis = await analyzeTarContents(tarPath);
     const warnings = [];
     if (fileHash.uploadBytes >= 100 * 1024 * 1024) {
       const largestFiles = tarAnalysis.topFiles.map(file => `${file.path} (${file.size})`).join(', ');
-      warnings.push(`QuickDeploy source archive is ${formatBytes(fileHash.uploadBytes)} across ${tarAnalysis.fileCount} files. Large files are included by default because they may be required at build/runtime; narrow --service-root or add explicit .quickdeployignore rules if these are not deploy inputs. Largest files: ${largestFiles || 'none'}.`);
+      warnings.push(quickdeployLargeArchiveWarning(mode, fileHash.uploadBytes, tarAnalysis.fileCount, largestFiles));
     }
     return { mode, tarPath, artifactType: 'source-tar', ...fileHash, ...tarAnalysis, warnings };
   } catch (error) {
@@ -674,7 +743,7 @@ async function commandVolumes() {
     if (!payload.id && !payload.containerMountPath) die('quickstack volumes remove requires --id <volumeId> or --mount-path <container-path>.');
     const result = api('volumes-remove', [selected.appId, JSON.stringify(payload)]);
     emit('success', {
-      message: `Detached volume ${result.removed.containerMountPath} from ${selected.name || selected.appId}. Redeploy the app for the mount to be removed and stale PVC cleanup to run.`,
+      message: `Detached volume ${result.removed.containerMountPath} from ${selected.name || selected.appId}. Redeploy the app for the detach to take effect.`,
       appId: selected.appId,
       removed: result.removed,
     });
@@ -917,7 +986,7 @@ async function commandConfig() {
   if (sub === 'validate') {
     const secretLeak = JSON.stringify(state).match(/qstk_|password|secret|token/i);
     if (secretLeak) die('Local .quickdeploy state appears to contain secret-like material. Remove it before committing.', 2, { state });
-    emit('success', { message: state.index || state.apps.length > 0 ? '.quickdeploy state contains no obvious secret markers.' : 'No .quickdeploy state found; nothing to validate.', state });
+    emit('success', { message: state.index || state.apps.length > 0 ? '.quickdeploy state passed the secret marker check.' : 'No .quickdeploy state found; nothing to validate.', state });
     return;
   }
   if (sub === 'pull' || sub === 'repair') {
@@ -1020,7 +1089,7 @@ async function commandSetup() {
   const url = optionValue('--url') || process.env.QUICKSTACK_URL;
   const apiKey = optionValue('--api-key') || process.env.QUICKSTACK_API_KEY;
   if (!url || !apiKey) {
-    die('Usage: quickstack setup --url <quickstack-url> --api-key <qstk_key>. Do not run this from inside a project if it would write secrets to the repo; credentials are stored in ~/.quickstack/config.json.');
+    die('Usage: quickstack setup --url <quickstack-url> --api-key <qstk_key>. Credentials are stored in ~/.quickstack/config.json, not in the project directory.');
   }
   if (!/^qstk_/.test(apiKey)) {
     die('The API key should start with qstk_.');
@@ -1038,7 +1107,7 @@ async function commandSetup() {
 
 async function commandNotImplemented(name) {
   emit('not_implemented', {
-    message: `quickstack ${name} is reserved for the first-class CLI surface but is not implemented in this build yet.`,
+    message: `quickstack ${name} is not yet available in this build.`,
     errors: [{ code: 'not_implemented', message: `quickstack ${name} is not implemented yet.` }],
   });
   process.exit(2);
@@ -1080,9 +1149,6 @@ Credentials:
   quickstack setup stores the dashboard URL and qstk_ API key in ~/.quickstack/config.json with 0600 permissions.
   QUICKSTACK_URL and QUICKSTACK_API_KEY still work as environment overrides for CI.
 
-Notes:
-  The CLI is the primary QuickStack deploy surface. The Claude skill should invoke
-  this CLI and relay its JSON questions/errors instead of reimplementing deploys.
 `);
 }
 
