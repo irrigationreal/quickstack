@@ -51,8 +51,8 @@ export default function GeneralAppRateLimits({ app, readonly }: {
     const [state, formAction] = useFormState((state: ServerActionResult<any, any>, payload: AppRateLimitsModel) => saveGeneralAppRateLimits(state, payload, app.id), FormUtils.getInitialFormState<typeof appRateLimitsZodModel>());
     useEffect(() => {
         if (state.status === 'success') {
-            toast.success('Rate Limits Saved', {
-                description: "Click \"deploy\" to apply the changes to your app.",
+            toast.success('Resource limits saved.', {
+                description: 'Click "Deploy" to apply the changes to your app.',
             });
         }
         FormUtils.mapValidationErrorsToForm<typeof appRateLimitsZodModel>(state, form);
@@ -61,8 +61,8 @@ export default function GeneralAppRateLimits({ app, readonly }: {
     return <>
         <Card>
             <CardHeader>
-                <CardTitle>Container Rate Limits</CardTitle>
-                <CardDescription>Provide optional rate Limits per running container instance.</CardDescription>
+                <CardTitle>Container resource limits</CardTitle>
+                <CardDescription>Set optional resource limits for each running container instance.</CardDescription>
             </CardHeader>
             <Form {...form}>
                 <form action={(e) => form.handleSubmit((data) => {

@@ -35,9 +35,9 @@ export default function VolumeBackupList({
 
     const asyncDeleteBackupVolume = async (volumeId: string) => {
         const confirm = await openDialog({
-            title: "Delete Backup Schedule",
-            description: "Are you sure you want to remove this Backup Schdeule? All backups created by this schedule will still be available.",
-            okButton: "Delete Backup Schedule"
+            title: "Delete backup schedule",
+            description: "Are you sure you want to remove this backup schedule? Backups created by this schedule will still be available.",
+            okButton: "Delete backup schedule"
         });
         if (confirm) {
             await Toast.fromAction(() => deleteBackupVolume(volumeId));

@@ -41,7 +41,7 @@ export function BuildLogsDialog({
           </DialogDescription>
         </DialogHeader>
         <div >
-          {!deploymentInfo.deploymentId && 'For this build is no log available'}
+          {!deploymentInfo.deploymentId && 'No log is available for this build.'}
           {deploymentInfo.deploymentId && <BuildLogsStreamed deploymentId={deploymentInfo.deploymentId} />}
         </div>
       </DialogContent>

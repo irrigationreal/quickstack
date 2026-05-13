@@ -46,8 +46,8 @@ export default function FileMountEditDialog({ children, fileMount, app }: { chil
   useEffect(() => {
     if (state.status === 'success') {
       form.reset();
-      toast.success('File Mount saved successfully', {
-        description: "Click \"deploy\" to apply the changes to your app.",
+      toast.success('File mount saved successfully.', {
+        description: 'Click "Deploy" to apply the changes to your app.',
       });
       setIsOpen(false);
     }
@@ -66,9 +66,9 @@ export default function FileMountEditDialog({ children, fileMount, app }: { chil
       <Dialog open={!!isOpen} onOpenChange={(isOpened) => setIsOpen(false)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Edit File Mount</DialogTitle>
+            <DialogTitle>Edit file mount</DialogTitle>
             <DialogDescription>
-              Configure your custom file mount. The content of the file mount will be available in the container at the specified mount path.
+              Configure the file mount. Its contents will be available in the container at the mount path you choose.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -81,7 +81,7 @@ export default function FileMountEditDialog({ children, fileMount, app }: { chil
                   name="containerMountPath"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Mount Path Container</FormLabel>
+                      <FormLabel>Container mount path</FormLabel>
                       <FormControl>
                         <Input placeholder="ex. /data/my-config.txt" {...field} />
                       </FormControl>
@@ -95,7 +95,7 @@ export default function FileMountEditDialog({ children, fileMount, app }: { chil
                   name="content"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>File Content</FormLabel>
+                      <FormLabel>File content</FormLabel>
                       <FormControl>
                         <Textarea rows={10} placeholder="Write your file content here..." {...field} />
                       </FormControl>

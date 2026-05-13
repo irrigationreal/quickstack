@@ -23,9 +23,9 @@ export default function FileMount({ app, readonly }: {
 
     const asyncDeleteFileMount = async (volumeId: string) => {
         const confirm = await openDialog({
-            title: "Delete File Mount",
-            description: "The file mount will be removed and the Data will be lost. The changes will take effect, after you deploy the app. Are you sure you want to remove this file mount?",
-            okButton: "Delete File Mount",
+            title: "Delete file mount",
+            description: "This removes the file mount and deletes its data. The change takes effect after you redeploy the app. Do you want to continue?",
+            okButton: "Delete file mount",
         });
         if (confirm) {
             await Toast.fromAction(() => deleteFileMount(volumeId));
@@ -35,12 +35,12 @@ export default function FileMount({ app, readonly }: {
     return <>
         <Card>
             <CardHeader>
-                <CardTitle>File Mount</CardTitle>
-                <CardDescription>Create files wich are mounted into the container.</CardDescription>
+                <CardTitle>File mounts</CardTitle>
+                <CardDescription>Create files that are mounted into the container.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
-                    <TableCaption>{app.appFileMounts.length} File Mounts</TableCaption>
+                    <TableCaption>{app.appFileMounts.length} file mounts</TableCaption>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Mount Path</TableHead>
@@ -66,7 +66,7 @@ export default function FileMount({ app, readonly }: {
             </CardContent>
             {!readonly && <CardFooter>
                 <FileMountEditDialog app={app}>
-                    <Button>Add File Mount</Button>
+                    <Button>Add file mount</Button>
                 </FileMountEditDialog>
             </CardFooter>
             }

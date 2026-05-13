@@ -65,7 +65,7 @@ export default function HealthCheckSettings({ app, readonly }: { app: AppExtende
 
     useEffect(() => {
         if (state.status === 'success') {
-            toast.success('Health Check Settings Saved');
+            toast.success('Health check settings saved.');
         }
         FormUtils.mapValidationErrorsToForm<typeof healthCheckZodModel>(state, form);
     }, [state]);
@@ -117,8 +117,8 @@ export default function HealthCheckSettings({ app, readonly }: { app: AppExtende
                                                 name="path"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabelWithQuestion hint="HTTP path on wich a health check is performed. If the statuscode is in the 200-399 range, the container is considered healthy.">
-                                                            HTTP Path
+                                                        <FormLabelWithQuestion hint="HTTP path on which a health check is performed. If the status code is in the 200–399 range, the container is considered healthy.">
+                                                            HTTP path
                                                         </FormLabelWithQuestion>
                                                         <FormControl>
                                                             <Input placeholder="/healthz" {...field} value={field.value || ''} />

@@ -29,11 +29,11 @@ export default function NetworkPolicy({ app, readonly }: {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Network Policy</CardTitle>
+                <CardTitle>Network policy</CardTitle>
                 <CardDescription>
                     Configure network traffic rules for your application.
-                    Changes will take effect after the next deployment.
-                    The Default setting for an App is "Allow All" wich allows traffic to/from all apps within the same project and the internet.
+                    Changes take effect after the next deployment.
+                    The default setting for an app is "Allow All," which allows traffic to and from all apps in the same project and the internet.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

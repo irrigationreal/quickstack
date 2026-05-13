@@ -256,7 +256,7 @@ export default function K3sUpdateInfo({
                             {k3sNextVersionInfo === undefined && (
                                 <Alert>
                                     <AlertDescription>
-                                        Your cluster is running the latest available K3s version wich is compatible with QuickStack.
+                                        Your cluster is running the latest available K3s version that is compatible with QuickStack.
                                     </AlertDescription>
                                 </Alert>
                             )}

@@ -60,7 +60,7 @@ export default function ChooseTemplateDialog({
                     <DialogHeader>
                         <DialogTitle>Create {templateType === 'database' ? 'Database' : 'App'} from Template</DialogTitle>
                         <DialogDescription>
-                            Choose a Template you want to deploy.
+                            Choose a template to deploy.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="relative mb-4">

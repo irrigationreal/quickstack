@@ -78,7 +78,7 @@ export default function CreateTemplateAppSetupDialog({
                     <DialogHeader>
                         <DialogTitle>Create App "{appTemplate?.name}"</DialogTitle>
                         <DialogDescription>
-                            Insert your values for the template.
+                            Enter the values for this template.
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="max-h-[70vh]">
