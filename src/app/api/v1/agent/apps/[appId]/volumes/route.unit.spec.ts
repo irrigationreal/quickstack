@@ -29,6 +29,12 @@ vi.mock('@/server/adapter/db.client', () => ({
 
 import { DELETE, GET, POST } from './route';
 
+function expectResponse(response: Response | undefined): Response {
+    expect(response).toBeDefined();
+    if (!response) throw new Error('Route handler did not return a response.');
+    return response;
+}
+
 function request(method: string, body?: Record<string, unknown>) {
     return new Request('http://quickstack.test/api/v1/agent/apps/app-1/volumes', {
         method,
@@ -68,7 +74,7 @@ describe('agent app volumes route', () => {
     });
 
     it('lists volume metadata without requiring write scope', async () => {
-        const response = await GET(request('GET'), { params: Promise.resolve({ appId: 'app-1' }) });
+        const response = expectResponse(await GET(request('GET'), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
 
         expect(response.status).toBe(200);
@@ -79,12 +85,12 @@ describe('agent app volumes route', () => {
     it('adds a Longhorn-backed volume for an authorized app', async () => {
         appMocks.getExtendedById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App', replicas: 1, appVolumes: [] });
 
-        const response = await POST(request('POST', {
+        const response = expectResponse(await POST(request('POST', {
             containerMountPath: '/data',
             size: 1024,
             accessMode: 'ReadWriteOnce',
             storageClassName: 'longhorn',
-        }), { params: Promise.resolve({ appId: 'app-1' }) });
+        }), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
 
         expect(response.status).toBe(200);
@@ -99,7 +105,7 @@ describe('agent app volumes route', () => {
     });
 
     it('removes a volume by mount path', async () => {
-        const response = await DELETE(request('DELETE', { containerMountPath: '/data' }), { params: Promise.resolve({ appId: 'app-1' }) });
+        const response = expectResponse(await DELETE(request('DELETE', { containerMountPath: '/data' }), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
 
         expect(response.status).toBe(200);

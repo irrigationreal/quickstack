@@ -23,6 +23,12 @@ vi.mock('@kubernetes/client-node', () => ({
 
 import { POST } from './route';
 
+function expectResponse(response: Response | undefined): Response {
+    expect(response).toBeDefined();
+    if (!response) throw new Error('Route handler did not return a response.');
+    return response;
+}
+
 function request(body: Record<string, unknown>) {
     return new Request('http://quickstack.test/api/v1/agent/apps/app-1/exec', {
         method: 'POST',
@@ -53,7 +59,7 @@ describe('agent app exec route', () => {
     });
 
     it('execs a command in the running app pod and returns stdout', async () => {
-        const response = await POST(request({ command: ['cat', '/etc/os-release'] }), { params: Promise.resolve({ appId: 'app-1' }) });
+        const response = expectResponse(await POST(request({ command: ['cat', '/etc/os-release'] }), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
 
         expect(response.status).toBe(200);
@@ -69,7 +75,7 @@ describe('agent app exec route', () => {
             return Promise.resolve();
         });
 
-        const response = await POST(request({ command: ['false'] }), { params: Promise.resolve({ appId: 'app-1' }) });
+        const response = expectResponse(await POST(request({ command: ['false'] }), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
 
         expect(response.status).toBe(200);
