@@ -148,7 +148,7 @@ export default function StorageList({ app, readonly, nodesInfo }: {
         <Card>
             <CardHeader>
                 <CardTitle>Volumes</CardTitle>
-                <CardDescription>Add one or more volumes to to configure persistent storage within your container.</CardDescription>
+                <CardDescription>Add one or more volumes to configure persistent storage within your container.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>

@@ -259,7 +259,7 @@ export default function StorageEditDialog({ children, volume, app, nodesInfo }: 
                                   <p className="max-w-[350px]">
                                     Choose where the volume is provisioned.<br /><br />
                                     <b>Longhorn</b> keeps data replicated across nodes.<br />
-                                    <b>Local Path</b> stores data on a the master node and works only in single-node clusters.
+                                    <b>Local Path</b> stores data on the master node and works only in single-node clusters.
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
