@@ -133,7 +133,7 @@ export default function StorageEditDialog({ children, volume, app, nodesInfo }: 
                   name="containerMountPath"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Mount Path Container</FormLabel>
+                      <FormLabel>Container mount path</FormLabel>
                       <FormControl>
                         <Input placeholder="ex. /data" {...field} />
                       </FormControl>
