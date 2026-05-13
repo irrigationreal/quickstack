@@ -35,10 +35,10 @@ export default function DbToolSwitch({
             const credentials = await Actions.run(() => getLoginCredentialsForRunningDbTool(app.id, toolId));
             setLoading(false);
             await openConfirmDialog({
-                title: "Open DB Tool",
+                title: "Open database tool",
                 description: <>
                     {toolNameString} is ready and can be opened in a new tab. <br />
-                    Use the following credentials to login:
+                    Use these credentials to log in:
                     <div className="pt-3 grid grid-cols-1 gap-1">
                         <Label>Username</Label>
                         <div> <Code>{credentials.username}</Code></div>
@@ -73,7 +73,7 @@ export default function DbToolSwitch({
                     try {
                         setLoading(true);
                         if (checked) {
-                            await Toast.fromAction(() => deployDbTool(app.id, toolId), `${toolNameString} is now activated`, `activating ${toolNameString}...`);
+                            await Toast.fromAction(() => deployDbTool(app.id, toolId), `${toolNameString} is now active`, `Activating ${toolNameString}...`);
                         } else {
                             await Toast.fromAction(() => deleteDbToolDeploymentForAppIfExists(app.id, toolId), `${toolNameString} has been deactivated`, `Deactivating ${toolNameString}...`);
                         }

@@ -31,14 +31,14 @@ export default function DbCredentials({
     return <>
         <Card>
             <CardHeader>
-                <CardTitle>Database Credentials</CardTitle>
-                <CardDescription>Use these credentials to connect to your database from other apps within the same project.</CardDescription>
+                <CardTitle>Database credentials</CardTitle>
+                <CardDescription>Use these credentials to connect to the database from other apps in the same project.</CardDescription>
             </CardHeader>
             <CardContent>
                 {!databaseCredentials ? <FullLoadingSpinner /> : <>
                     <div className="grid grid-cols-2 gap-4">
                         {!!databaseCredentials?.databaseName && <>   <CopyInputField
-                            label="Database Name"
+                            label="Database name"
                             value={databaseCredentials?.databaseName || ''} />
 
                             <div></div>
@@ -54,16 +54,16 @@ export default function DbCredentials({
                             value={databaseCredentials?.password || ''} />}
 
                         <CopyInputField
-                            label="Internal Hostname"
+                            label="Internal hostname"
                             value={databaseCredentials?.hostname || ''} />
 
                         <CopyInputField
-                            label="Internal Port"
+                            label="Internal port"
                             value={(databaseCredentials?.port + '')} />
                     </div>
                     <div className="grid grid-cols-1 gap-4 pt-4">
                         <CopyInputField
-                            label="Internal Connection URL"
+                            label="Internal connection URL"
                             secret={true}
                             value={databaseCredentials?.internalConnectionUrl || ''} />
                     </div>

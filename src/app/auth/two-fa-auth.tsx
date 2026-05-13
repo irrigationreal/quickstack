@@ -60,8 +60,8 @@ export default function TwoFaAuthForm({
     return (
         <Card className="w-[350px] mx-auto">
             <CardHeader>
-                <CardTitle>2FA Code</CardTitle>
-                <CardDescription>Enter your 2FA code to complete the login process.</CardDescription>
+                <CardTitle>Two-factor code</CardTitle>
+                <CardDescription>Enter your two-factor code to finish signing in.</CardDescription>
             </CardHeader>
             <Form {...form}>
                 <form onSubmit={async (e) => {
@@ -77,7 +77,7 @@ export default function TwoFaAuthForm({
                             name="twoFactorCode"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>2FA Token</FormLabel>
+                                    <FormLabel>Two-factor code</FormLabel>
                                     <FormControl>
                                         <Input {...field} type="number" />
                                     </FormControl>
@@ -89,7 +89,7 @@ export default function TwoFaAuthForm({
                     </CardContent>
                     <CardFooter>
                         <p className="text-red-500">{errorMessages}</p>
-                        <Button type="submit" className="w-full" disabled={loading}>{loading ? <LoadingSpinner></LoadingSpinner> : 'Login'}</Button>
+                        <Button type="submit" className="w-full" disabled={loading}>{loading ? <LoadingSpinner></LoadingSpinner> : 'Log in'}</Button>
                     </CardFooter>
                 </form>
             </Form>

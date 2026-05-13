@@ -33,7 +33,7 @@ export default function UserRegistrationForm() {
 
     useEffect(() => {
         if (state.status === 'success') {
-            toast.success(state.message ?? 'Registration successful. You can now login.');
+            toast.success(state.message ?? 'Registration successful. You can now log in.');
             window.location.reload();
         }
     }, [state]);
@@ -41,8 +41,8 @@ export default function UserRegistrationForm() {
     return (
         <Card className="w-[350px] mx-auto">
             <CardHeader>
-                <CardTitle>Registration</CardTitle>
-                <CardDescription>Enter your credentials to register for QuickStack.</CardDescription>
+                <CardTitle>Create account</CardTitle>
+                <CardDescription>Enter your details to create a QuickStack account.</CardDescription>
             </CardHeader>
             <Form {...form}>
                 <form action={(e) => form.handleSubmit((data) => formAction(data))()}
@@ -53,7 +53,7 @@ export default function UserRegistrationForm() {
                             name="email"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>E-Mail</FormLabel>
+                                    <FormLabel>Email</FormLabel>
                                     <FormControl>
                                         <Input {...field} value={field.value as string | number | readonly string[] | undefined} />
                                     </FormControl>
@@ -82,7 +82,7 @@ export default function UserRegistrationForm() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabelWithQuestion hint="This domain will be used to access your QuickStack instance. Make sure the DNS settings of the domain are correctly configured to point to the server IP address. This can also be configured later in the QuickStack settings.">
-                                        QuickStack Domain (optional)
+                                        QuickStack domain (optional)
                                     </FormLabelWithQuestion>
                                     <FormControl>
                                         <Input {...field} value={field.value as string | number | readonly string[] | undefined} />

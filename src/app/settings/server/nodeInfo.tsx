@@ -17,10 +17,10 @@ export default function NodeInfo({ nodeInfos, clusterJoinToken }: { nodeInfos: N
 
     const setNodeStatusClick = async (nodeName: string, schedulable: boolean) => {
         const confirmation = await openDialog({
-            title: 'Update Node Status',
-            description: `Do you really want to ${schedulable ? 'activate' : 'deactivate'} Node ${nodeName}? ${!schedulable ? 'This will stop all running containers on this node and moves the workload to the other nodes. Future workloads won\'t be scheduled on this node.' : ''}`,
+            title: 'Update node status',
+            description: `Do you want to ${schedulable ? 'activate' : 'deactivate'} node ${nodeName}? ${!schedulable ? 'This will stop all running containers on this node and move the workload to other nodes. Future workloads will not be scheduled on this node.' : ''}`,
             okButton: 'Yes',
-            cancelButton: 'cancel'
+            cancelButton: 'Cancel'
         });
         if (confirmation) {
             Toast.fromAction(() => setNodeStatus(nodeName, schedulable));
@@ -32,11 +32,11 @@ export default function NodeInfo({ nodeInfos, clusterJoinToken }: { nodeInfos: N
             <CardHeader className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                 <div>
                     <CardTitle>Nodes</CardTitle>
-                    <CardDescription>Overview of all Nodes in your Cluster</CardDescription>
+                    <CardDescription>Overview of all nodes in your cluster.</CardDescription>
                 </div>
                 <div className="flex justify-end">
                     <AddClusterNodeDialog clusterJoinToken={clusterJoinToken}>
-                        <Button>Add Cluster Node</Button>
+                        <Button>Add cluster node</Button>
                     </AddClusterNodeDialog>
                 </div>
             </CardHeader>
@@ -92,7 +92,7 @@ export default function NodeInfo({ nodeInfos, clusterJoinToken }: { nodeInfos: N
                                                 <span className={nodeInfo.schedulable ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold'}> {nodeInfo.schedulable ? 'Yes' : 'No'}</span>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                <p className="max-w-[350px]">{nodeInfo.schedulable ? 'Node is ready to run containers.' : 'Node ist deactivated. All containers will be scheduled on other nodes.'}</p>
+                                                <p className="max-w-[350px]">{nodeInfo.schedulable ? 'Node is ready to run containers.' : 'Node is deactivated. All containers will be scheduled on other nodes.'}</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
@@ -111,7 +111,7 @@ export default function NodeInfo({ nodeInfos, clusterJoinToken }: { nodeInfos: N
                                 </div>
                             </div>
                             {index !== 0 && <div className="flex px-4 pb-4 gap-4">
-                                <Button onClick={() => setNodeStatusClick(nodeInfo.name, !nodeInfo.schedulable)} variant="outline">{nodeInfo.schedulable ? 'Deactivate' : 'Activate'} Node</Button>
+                                <Button onClick={() => setNodeStatusClick(nodeInfo.name, !nodeInfo.schedulable)} variant="outline">{nodeInfo.schedulable ? 'Deactivate' : 'Activate'} node</Button>
                             </div>}
                         </div>
                     ))}

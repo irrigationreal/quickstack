@@ -25,9 +25,9 @@ export default function S3TargetsTable({ targets }: {
 
     const asyncDeleteTarget = async (id: string) => {
         const confirm = await openDialog({
-            title: "Delete S3 Target",
-            description: "Do you really want to delete this S3 Target?",
-            okButton: "Delete S3 Target"
+            title: "Delete S3 target",
+            description: "Do you want to delete this S3 target?",
+            okButton: "Delete S3 target"
         });
         if (confirm) {
             await Toast.fromAction(() => deleteS3Target(id));

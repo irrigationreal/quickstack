@@ -35,7 +35,7 @@ export default function LonghornUiToggle() {
                 <>
                     Longhorn UI is ready and can be opened in a new tab.
                     <br />
-                    Use the following credentials to log in:
+                    Use these credentials to log in:
                     <div className="pt-3 grid grid-cols-1 gap-1">
                         <Label>Username</Label>
                         <div><Code>{credentials.username}</Code></div>
@@ -107,10 +107,10 @@ export default function LonghornUiToggle() {
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <HardDrive className="h-5 w-5" />
-                    Longhorn UI Access
+                    Longhorn UI access
                 </CardTitle>
                 <CardDescription>
-                    Enable access to the Longhorn UI via a password authentication. This is only recommended for advanced users.
+                    Enable password-protected access to the Longhorn UI. This is recommended only for advanced users.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -121,7 +121,7 @@ export default function LonghornUiToggle() {
                             checked={isActive ?? false}
                             onCheckedChange={handleToggle}
                         />
-                        <Label>Longhorn UI Access</Label>
+                        <Label>Longhorn UI access</Label>
                     </div>
                     {isActive && (
                         <Button variant="outline" onClick={openLonghornUi} disabled={loading}>

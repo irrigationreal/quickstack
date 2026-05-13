@@ -77,8 +77,8 @@ export default function DialogEditDialog({ children, domain, appId }: { children
     useEffect(() => {
         if (state.status === 'success') {
             form.reset();
-            toast.success('Domain saved successfully. ', {
-                description: "Click \"deploy\" to apply the changes to your app.",
+            toast.success('Domain saved successfully.', {
+                description: 'Click "Deploy" to apply the changes to your app.',
             });
             setIsOpen(false);
         }
@@ -115,9 +115,9 @@ export default function DialogEditDialog({ children, domain, appId }: { children
             <Dialog open={!!isOpen} onOpenChange={(isOpened) => setIsOpen(false)}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>Edit Domain</DialogTitle>
+                        <DialogTitle>Edit domain</DialogTitle>
                         <DialogDescription>
-                            Configure your custom domain for this application. Note that the domain must be pointing to the server IP address.
+                            Configure a domain for this app. The domain must point to the server IP address.
                         </DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
@@ -126,8 +126,8 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                         })()}>
                             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'custom' | 'quickstack')} className="w-full">
                                 <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="custom">Custom Domain</TabsTrigger>
-                                    {!!domainSuffix && <TabsTrigger value="quickstack">Generated Domain</TabsTrigger>}
+                                    <TabsTrigger value="custom">Custom domain</TabsTrigger>
+                                    {!!domainSuffix && <TabsTrigger value="quickstack">Generated domain</TabsTrigger>}
                                 </TabsList>
 
                                 <TabsContent value="custom" className="space-y-4 mt-4">
@@ -150,7 +150,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                         name="port"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>App Port</FormLabel>
+                                                <FormLabel>App port</FormLabel>
                                                 <FormControl>
                                                     <Input type="number" placeholder="ex. 80" {...field} />
                                                 </FormControl>
@@ -159,7 +159,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                         )}
                                     />
 
-                                    <CheckboxFormField form={form} name="useSsl" label="use HTTPS" />
+                                    <CheckboxFormField form={form} name="useSsl" label="Use HTTPS" />
                                     {values.useSsl && <CheckboxFormField form={form} name="redirectHttps" label="Redirect HTTP to HTTPS" />}
                                 </TabsContent>
 
@@ -171,7 +171,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                             const prefixValue = getQuickstackPrefix(field.value || '');
                                             return (
                                                 <FormItem>
-                                                    <FormLabel>Domain Prefix</FormLabel>
+                                                    <FormLabel>Domain prefix</FormLabel>
                                                     <FormControl>
                                                         <div className="flex items-center gap-2">
                                                             <Input
@@ -192,7 +192,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                                                     </span>
                                                                 </TooltipTrigger>
                                                                 <TooltipContent>
-                                                                    <p>This is the generated app domain <br />for your instance.</p>
+                                                                    <p>This is the generated app domain<br />for your instance.</p>
                                                                 </TooltipContent>
                                                             </Tooltip>
                                                         </div>
@@ -208,7 +208,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                         name="port"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>App Port</FormLabel>
+                                                <FormLabel>App port</FormLabel>
                                                 <FormControl>
                                                     <Input type="number" placeholder="ex. 80" {...field} />
                                                 </FormControl>
@@ -217,7 +217,7 @@ export default function DialogEditDialog({ children, domain, appId }: { children
                                         )}
                                     />
 
-                                    <CheckboxFormField form={form} name="useSsl" label="use HTTPS" />
+                                    <CheckboxFormField form={form} name="useSsl" label="Use HTTPS" />
                                     {values.useSsl && <CheckboxFormField form={form} name="redirectHttps" label="Redirect HTTP to HTTPS" />}
                                 </TabsContent>
                             </Tabs>

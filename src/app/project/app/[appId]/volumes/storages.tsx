@@ -69,10 +69,10 @@ export default function StorageList({ app, readonly, nodesInfo }: {
     const asyncDeleteVolume = async (volumeId: string, isBaseVolume: boolean) => {
         try {
             const confirm = await openDialog({
-                title: isBaseVolume ? "Delete Volume" : "Detach Volume",
-                description: isBaseVolume ? "The volume will be removed and the Data will be lost. The changes will take effect, after you deploy the app. Are you sure you want to remove this volume?" :
-                    "The volume will be detached from the app. The data will remain on the cluster and can be re-attached later. The changes will take effect, after you deploy the app. Are you sure you want to detach this volume?",
-                okButton: isBaseVolume ? "Delete Volume" : "Detach Volume"
+                title: isBaseVolume ? "Delete volume" : "Detach volume",
+                description: isBaseVolume ? "This removes the volume and deletes its data. The change takes effect after you redeploy the app. Do you want to continue?" :
+                    "This detaches the volume from the app, but keeps the data on the cluster so you can attach it again later. The change takes effect after you redeploy the app. Do you want to continue?",
+                okButton: isBaseVolume ? "Delete volume" : "Detach volume"
             });
             if (confirm) {
                 setIsLoading(true);
@@ -86,8 +86,8 @@ export default function StorageList({ app, readonly, nodesInfo }: {
     const asyncDownloadPvcData = async (volumeId: string) => {
         try {
             const confirm = await openDialog({
-                title: "Download Volume Data",
-                description: "The volume data will be zipped and downloaded. Depending on the size of the volume this can take a while. Are you sure you want to download the volume data?",
+                title: "Download volume data",
+                description: "The volume data will be zipped and downloaded. Depending on the volume size, this may take a while. Do you want to continue?",
                 okButton: "Download"
             });
             if (confirm) {
@@ -107,9 +107,9 @@ export default function StorageList({ app, readonly, nodesInfo }: {
 
         try {
             const confirm = await openDialog({
-                title: "Open File Browser",
-                description: "To view the Files of the volume, your app has to be stopped. The file browser will be opened in a new tab. Are you sure you want to open the file browser?",
-                okButton: "Stop App and Open File Browser"
+                title: "Open file browser",
+                description: "To view the files in this volume, the app must be stopped first. The file browser will open in a new tab. Do you want to continue?",
+                okButton: "Stop app and open file browser"
             });
             if (!confirm) {
                 return;
@@ -120,10 +120,10 @@ export default function StorageList({ app, readonly, nodesInfo }: {
                 return;
             }
             await openDialog({
-                title: "File Browser Ready",
+                title: "File browser ready",
                 description: <>
-                    The File Browser is ready and can be opened in a new tab. <br />
-                    Use the following credentials to login:
+                    The file browser is ready and can be opened in a new tab. <br />
+                    Use these credentials to log in:
                     <div className="pt-3 grid grid-cols-1 gap-1">
                         <Label>Username</Label>
                         <div> <Code>quickstack</Code></div>
@@ -133,7 +133,7 @@ export default function StorageList({ app, readonly, nodesInfo }: {
                         <div><Code>{fileBrowserStartResult.data.password}</Code></div>
                     </div>
                     <div>
-                        <Button variant='outline' onClick={() => window.open(fileBrowserStartResult.data!.url, '_blank')}>Open File Browser</Button>
+                        <Button variant='outline' onClick={() => window.open(fileBrowserStartResult.data!.url, '_blank')}>Open file browser</Button>
                     </div>
                 </>,
                 okButton: '',
@@ -287,7 +287,7 @@ export default function StorageList({ app, readonly, nodesInfo }: {
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <p>{volume.sharedVolumeId ? 'Detach Volume' : 'Delete Volume'}</p>
+                                                    <p>{volume.sharedVolumeId ? 'Detach volume' : 'Delete volume'}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
@@ -300,10 +300,10 @@ export default function StorageList({ app, readonly, nodesInfo }: {
             </CardContent>
             {!readonly && <CardFooter className="flex gap-2">
                 <DialogEditDialog app={app} nodesInfo={nodesInfo}>
-                    <Button>Add Volume</Button>
+                    <Button>Add volume</Button>
                 </DialogEditDialog>
                 <SharedStorageEditDialog app={app}>
-                    <Button variant="outline">Add Shared Volume</Button>
+                    <Button variant="outline">Add shared volume</Button>
                 </SharedStorageEditDialog>
             </CardFooter>}
         </Card >

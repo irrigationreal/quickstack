@@ -20,98 +20,98 @@ export default function QuickStackMaintenanceSettings({
     return <div className="space-y-4">
         <Card>
             <CardHeader>
-                <CardTitle>Free Up Disk Space</CardTitle>
+                <CardTitle>Free up disk space</CardTitle>
             </CardHeader>
             <CardContent className="flex gap-4 flex-wrap">
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Purge Images',
-                        description: 'This action deletes all build images from the internal QuickStack container registry. Use this action to free up disk space.',
-                        okButton: "Purge Images",
+                        title: 'Purge images',
+                        description: 'Delete all build images from the internal QuickStack container registry to free up disk space.',
+                        okButton: "Purge images",
                     })) {
                         Toast.fromAction(() => purgeRegistryImages());
                     }
-                }}><Trash /> Purge Images</Button>
+                }}><Trash /> Purge images</Button>
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Cleanup Old Build Jobs',
-                        description: 'This action deletes all old build jobs. Use this action to free up disk space.',
-                        okButton: "Cleanup"
+                        title: 'Clean up old build jobs',
+                        description: 'Delete old build jobs to free up disk space.',
+                        okButton: "Clean up"
                     })) {
                         Toast.fromAction(() => cleanupOldBuildJobs());
                     }
-                }}><Trash /> Cleanup Old Build Jobs</Button>
+                }}><Trash /> Clean up old build jobs</Button>
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Cleanup Temp Files',
-                        description: 'This action deletes all temporary files. Use this action to free up disk space.',
-                        okButton: "Cleanup"
+                        title: 'Clean up temporary files',
+                        description: 'Delete temporary files to free up disk space.',
+                        okButton: "Clean up"
                     })) {
                         Toast.fromAction(() => cleanupOldTmpFiles());
                     }
-                }}><Trash /> Cleanup Temp Files</Button>
+                }}><Trash /> Clean up temporary files</Button>
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Delete old App logs',
-                        description: 'This action deletes all old app logs. Use this action to free up disk space.',
-                        okButton: "Delete old App logs"
+                        title: 'Delete old app logs',
+                        description: 'Delete old app logs to free up disk space.',
+                        okButton: "Delete old app logs"
                     })) {
                         Toast.fromAction(() => deleteOldAppLogs());
                     }
-                }}><Trash /> Delete old App logs</Button>
+                }}><Trash /> Delete old app logs</Button>
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Delete Orphaned Containers',
-                        description: 'This action deletes all unused pods (failed or succeded). Use this action to free up resources.',
-                        okButton: "Delete Orphaned Containers"
+                        title: 'Delete orphaned containers',
+                        description: 'Delete unused pods, including failed and succeeded ones, to free up resources.',
+                        okButton: "Delete orphaned containers"
                     })) {
                         Toast.fromAction(() => deleteAllFailedAndSuccededPods());
                     }
-                }}><Trash /> Delete Orphaned Containers</Button>
+                }}><Trash /> Delete orphaned containers</Button>
             </CardContent>
         </Card>
         <Card>
             <CardHeader>
-                <CardTitle>Monitoring & Troubleshooting</CardTitle>
+                <CardTitle>Monitoring and troubleshooting</CardTitle>
             </CardHeader>
             <CardContent className="flex gap-4 flex-wrap">
 
                 {qsPodName && <LogsDialog namespace={Constants.QS_NAMESPACE} podName={qsPodName}>
-                    <Button variant="secondary" ><SquareTerminal /> Open QuickStack Logs</Button>
+                    <Button variant="secondary" ><SquareTerminal /> Open QuickStack logs</Button>
                 </LogsDialog>}
 
                 <Button variant="secondary" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: 'Update Registry',
-                        description: 'This action will restart the internal QuickStack container registry.',
-                        okButton: "Update Registry"
+                        title: 'Update registry',
+                        description: 'Restart the internal QuickStack container registry.',
+                        okButton: "Update registry"
                     })) {
                         Toast.fromAction(() => updateRegistry());
                     }
-                }}><RotateCcw /> Force Update Registry</Button>
+                }}><RotateCcw /> Force update registry</Button>
 
             </CardContent>
         </Card>
         <Card>
             <CardHeader>
-                <CardTitle>Network Policies</CardTitle>
+                <CardTitle>Network policies</CardTitle>
             </CardHeader>
             <CardContent className="flex gap-4 flex-wrap">
 
                 <Button variant="destructive" onClick={async () => {
                     if (await useConfirm.openConfirmDialog({
-                        title: '⚠️ Delete All Network Policies',
-                        description: 'WARNING: This is a bad idea! This action will delete ALL network policies across all namespaces. Your applications will lose all network security restrictions. Only use this for troubleshooting or emergency situations. Are you absolutely sure?',
-                        okButton: "Yes, Delete All Policies",
+                        title: 'Delete all network policies',
+                        description: 'Warning: this deletes all network policies across all namespaces. Your applications will lose every network security restriction. Only use this for troubleshooting or emergencies. Are you sure you want to continue?',
+                        okButton: "Yes, delete all policies",
                     })) {
                         Toast.fromAction(() => deleteAllNetworkPolicies());
                     }
-                }}><ShieldOff /> Delete All Network Policies</Button>
+                }}><ShieldOff /> Delete all network policies</Button>
 
             </CardContent>
         </Card>

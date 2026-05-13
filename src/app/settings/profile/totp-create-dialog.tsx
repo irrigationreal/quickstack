@@ -34,7 +34,7 @@ export default function TotpCreateDialog({
 
     useEffect(() => {
         if (state.status === 'success') {
-            toast.success('2FA settings updated successfully');
+            toast.success('2FA settings updated successfully.');
             form.setValue('totp', '');
             form.clearErrors();
             setIsOpen(false);
@@ -60,7 +60,7 @@ export default function TotpCreateDialog({
                 <DialogHeader>
                     <DialogTitle>Enable 2FA</DialogTitle>
                     <DialogDescription>
-                        To enable the Two-Facor-Authentication (2FA) scan the QR code with your preferred authenticator app and enter the token below.
+                        Scan the QR code with your authenticator app, then enter the code below to finish enabling two-factor authentication.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -76,7 +76,7 @@ export default function TotpCreateDialog({
                                     name="totp"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>2FA Token</FormLabel>
+                                            <FormLabel>2FA code</FormLabel>
                                             <FormControl>
                                                 <Input {...field} />
                                             </FormControl>
@@ -88,7 +88,7 @@ export default function TotpCreateDialog({
                                 <p className="text-red-500">{state?.message}</p>
                             </div>
                             <DialogFooter>
-                                <SubmitButton>Verify 2FA Token</SubmitButton>
+                                <SubmitButton>Verify 2FA code</SubmitButton>
                             </DialogFooter>
                         </form>
                     </Form >

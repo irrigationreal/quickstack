@@ -37,7 +37,7 @@ export function AppEventsDialog({
       }
     } catch (error) {
       console.error(error);
-      toast.error('An error occured while loading events.');
+      toast.error('An error occurred while loading events.');
     }
   }
 
@@ -56,10 +56,9 @@ export function AppEventsDialog({
     }}>
       <DialogContent className="sm:max-w-[1000px]">
         <DialogHeader>
-          <DialogTitle>App Events</DialogTitle>
+          <DialogTitle>App events</DialogTitle>
           <DialogDescription>
-            App events occur when changes are made to the deployment. For example, when a deployment is created, updated, or restarted.
-            Advanced users can read these events to understand what is happening in the background. Events are only available for a short period of time.
+            App events show changes to the deployment, such as creates, updates, and restarts. They can help you understand what is happening in the background, but they are only available for a short time.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -67,14 +66,14 @@ export function AppEventsDialog({
           {events && <>
             <Table>
               <ScrollArea className="max-h-[70vh]">
-                <TableCaption>{events.length} recent Events</TableCaption>
+                <TableCaption>{events.length} recent events</TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Time</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Action</TableHead>
                     <TableHead>Note</TableHead>
-                    <TableHead>Pod Name</TableHead>
+                    <TableHead>Pod name</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -22,12 +22,12 @@ export default function UserGroupsTable({ userGroups, projects }: {
 
     const asyncDeleteItem = async (id: string) => {
         const confirm = await openDialog({
-            title: "Delete Group",
-            description: "Do you really want to delete this group? Users with this group will be assigned to no role afterwards. They will not be able to use QuickStack until you reassign a new group to them.",
+            title: "Delete group",
+            description: "Do you want to delete this group? Users in this group will lose their assigned role and will not be able to use QuickStack until you assign them to a new group.",
             okButton: "Delete",
         });
         if (confirm) {
-            await Toast.fromAction(() => deleteRole(id), 'Deleting Group...', 'Group deleted successfully');
+            await Toast.fromAction(() => deleteRole(id), 'Deleting group...', 'Group deleted successfully.');
         }
     };
 
@@ -35,8 +35,8 @@ export default function UserGroupsTable({ userGroups, projects }: {
         <SimpleDataTable columns={[
             ['id', 'ID', false],
             ['name', 'Name', true],
-            ["createdAt", "Created At", true, (item) => formatDateTime((item as any).createdAt)],
-            ["updatedAt", "Updated At", false, (item) => formatDateTime((item as any).updatedAt)],
+            ["createdAt", "Created at", true, (item) => formatDateTime((item as any).createdAt)],
+            ["updatedAt", "Updated at", false, (item) => formatDateTime((item as any).updatedAt)],
         ]}
             data={userGroups}
             actionCol={(item) =>

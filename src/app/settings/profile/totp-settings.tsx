@@ -12,14 +12,14 @@ export default function ToTpSettings({ totpEnabled }: { totpEnabled: boolean }) 
     return <>
         <Card>
             <CardHeader>
-                <CardTitle>2FA Settings</CardTitle>
+                <CardTitle>Two-factor authentication</CardTitle>
                 <CardDescription>Two-factor authentication (2FA) adds an extra layer of security to your account.</CardDescription>
             </CardHeader>
             <CardFooter className="gap-4">
                 <TotpCreateDialog >
-                    <Button variant={totpEnabled ? 'outline' : 'default'}>{totpEnabled ? 'Replace current 2FA Config' : 'Enable 2FA'}</Button>
+                    <Button variant={totpEnabled ? 'outline' : 'default'}>{totpEnabled ? 'Replace current 2FA setup' : 'Enable 2FA'}</Button>
                 </TotpCreateDialog>
-                {totpEnabled && <Button onClick={() => Toast.fromAction(() => deactivate2fa())} variant="destructive">Deactivate 2FA</Button>}
+                {totpEnabled && <Button onClick={() => Toast.fromAction(() => deactivate2fa())} variant="destructive">Disable 2FA</Button>}
             </CardFooter>
         </Card >
     </>;

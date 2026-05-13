@@ -72,7 +72,7 @@ export default function UserEditOverlay({ children, user, userGroups }: {
       <Dialog open={!!isOpen} onOpenChange={(isOpened) => setIsOpen(false)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{user?.id ? 'Edit' : 'Create'} User</DialogTitle>
+            <DialogTitle>{user?.id ? 'Edit user' : 'Create user'}</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh]">
             <div className="px-2">
@@ -86,7 +86,7 @@ export default function UserEditOverlay({ children, user, userGroups }: {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>E-Mail</FormLabel>
+                          <FormLabel>Email</FormLabel>
                           <FormControl>
                             <Input placeholder="" {...field} />
                           </FormControl>
@@ -111,12 +111,12 @@ export default function UserEditOverlay({ children, user, userGroups }: {
                       name="newPassword"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>New Password {user?.id && <>(optional)</>}</FormLabel>
+                          <FormLabel>New password {user?.id && <>(optional)</>}</FormLabel>
                           <FormControl>
                             <Input type="password" {...field} />
                           </FormControl>
                           <FormDescription>
-                            {user?.id && <>Leave empty to keep the old password.</>}
+                            {user?.id && <>Leave this empty to keep the current password.</>}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

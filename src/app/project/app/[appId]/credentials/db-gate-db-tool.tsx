@@ -51,7 +51,7 @@ export default function DbGateDbTool({
                 title: "Open DB Gate",
                 description: <>
                     DB Gate is ready and can be opened in a new tab. <br />
-                    Use the following credentials to login:
+                    Use these credentials to log in:
                     <div className="pt-3 grid grid-cols-1 gap-1">
                         <Label>Username</Label>
                         <div> <Code>{credentials.username}</Code></div>
@@ -86,7 +86,7 @@ export default function DbGateDbTool({
                     try {
                         setLoading(true);
                         if (checked) {
-                            await Toast.fromAction(() => deployDbTool(app.id, 'dbgate'), 'DB Gate is now activated', 'Activating DB Gate...');
+                            await Toast.fromAction(() => deployDbTool(app.id, 'dbgate'), 'DB Gate is now active', 'Activating DB Gate...');
                         } else {
                             await Toast.fromAction(() => deleteDbToolDeploymentForAppIfExists(app.id, 'dbgate'), 'DB Gate has been deactivated', 'Deactivating DB Gate...');
                         }

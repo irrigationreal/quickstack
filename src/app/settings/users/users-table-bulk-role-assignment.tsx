@@ -37,15 +37,15 @@ export default function UsersBulkRoleAssignment({
     userGroups
 }: UsersBulkRoleAssignmentProps) {
     const [selectedGroup, setSelectedGroup] = useState<string>("");
+    const selectedUsersLabel = `${selectedUsers.length} user${selectedUsers.length === 1 ? '' : 's'}`;
 
     const handleAssignGroup = async () => {
         if (!selectedGroup) {
-            toast.error("Please select a group");
+            toast.error("Please select a group.");
             return;
         }
 
-        await Toast.fromAction(() => assignRoleToUsers(selectedUsers.map(u => u.id), selectedGroup),  `Group
-         assigned to ${selectedUsers.length} user(s)`, 'Assigning Group...');
+        await Toast.fromAction(() => assignRoleToUsers(selectedUsers.map(u => u.id), selectedGroup), `Assigned a group to ${selectedUsersLabel}.`, 'Assigning group...');
         onOpenChange(false);
         setSelectedGroup("");
     };
@@ -54,9 +54,9 @@ export default function UsersBulkRoleAssignment({
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Assign Group</DialogTitle>
+                    <DialogTitle>Assign group</DialogTitle>
                     <DialogDescription>
-                        Select a Group to assign to {selectedUsers.length} selected user(s).
+                        Select a group to assign to {selectedUsersLabel}.
                     </DialogDescription>
                 </DialogHeader>
                 <Select onValueChange={setSelectedGroup} value={selectedGroup}>

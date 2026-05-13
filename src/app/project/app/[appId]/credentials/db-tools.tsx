@@ -16,13 +16,13 @@ export default function DbToolsCard({
     return <>
         <Card>
             <CardHeader>
-                <CardTitle>Database Access</CardTitle>
-                <CardDescription>Activate one of the following tools to access the database through your browser.</CardDescription>
+                <CardTitle>Database access</CardTitle>
+                <CardDescription>Enable one of these tools to access the database in your browser.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <DbGateDbTool app={app} />
                 {['MYSQL', 'MARIADB'].includes(app.appType) && <DbToolSwitch app={app} toolId="phpmyadmin"
-                    toolNameString="PHP My Admin" />}
+                    toolNameString="phpMyAdmin" />}
                 {app.appType === 'POSTGRES' && <DbToolSwitch app={app} toolId="pgadmin" toolNameString="pgAdmin" />}
             </CardContent>
         </Card >

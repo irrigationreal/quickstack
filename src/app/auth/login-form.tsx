@@ -47,7 +47,7 @@ export default function UserLoginForm() {
                 throw new Error(authStatusResponse.message);
             }
             if (!authStatusResponse.data) {
-                throw new Error("Unknown error occured");
+                throw new Error("An unknown error occurred.");
             }
             const authData = authStatusResponse.data as { email: string, twoFaEnabled: boolean };
             if (!authData.twoFaEnabled) {
@@ -75,7 +75,7 @@ export default function UserLoginForm() {
     return (
         <Card className="w-[350px] mx-auto">
             <CardHeader>
-                <CardTitle>Sign In</CardTitle>
+                <CardTitle>Sign in</CardTitle>
                 <CardDescription>Enter your email and password to access your account.</CardDescription>
             </CardHeader>
             <Form {...form}>
@@ -92,7 +92,7 @@ export default function UserLoginForm() {
                             name="email"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>E-Mail</FormLabel>
+                                    <FormLabel>Email</FormLabel>
                                     <FormControl>
                                         <Input {...field} value={field.value as string | number | readonly string[] | undefined} />
                                     </FormControl>
@@ -117,7 +117,7 @@ export default function UserLoginForm() {
                     </CardContent>
                     <CardFooter>
                         <p className="text-red-500">{errorMessages}</p>
-                        <Button type="submit" className="w-full" disabled={loading}>{loading ? <LoadingSpinner></LoadingSpinner> : 'Login'}</Button>
+                        <Button type="submit" className="w-full" disabled={loading}>{loading ? <LoadingSpinner></LoadingSpinner> : 'Log in'}</Button>
                     </CardFooter>
                 </form>
             </Form>

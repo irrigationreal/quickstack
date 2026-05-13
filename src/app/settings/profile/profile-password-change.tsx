@@ -38,7 +38,7 @@ export default function ProfilePasswordChange() {
         <Card>
             <CardHeader>
                 <CardTitle>Password</CardTitle>
-                <CardDescription>Change your existing login password.</CardDescription>
+                <CardDescription>Change the password you use to sign in.</CardDescription>
             </CardHeader>
             <Form {...form}>
                 <form action={(e) => form.handleSubmit((data) => {
@@ -50,7 +50,7 @@ export default function ProfilePasswordChange() {
                             name="oldPassword"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Current Password</FormLabel>
+                                    <FormLabel>Current password</FormLabel>
                                     <FormControl>
                                         <Input type="password" {...field} />
                                     </FormControl>
@@ -63,7 +63,7 @@ export default function ProfilePasswordChange() {
                             name="newPassword"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>New Password</FormLabel>
+                                    <FormLabel>New password</FormLabel>
                                     <FormControl>
                                         <Input type="password" {...field} />
                                     </FormControl>
@@ -76,7 +76,7 @@ export default function ProfilePasswordChange() {
                             name="confirmNewPassword"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Confirm new Password</FormLabel>
+                                    <FormLabel>Confirm new password</FormLabel>
                                     <FormControl>
                                         <Input type="password" {...field} />
                                     </FormControl>
@@ -86,7 +86,7 @@ export default function ProfilePasswordChange() {
                         />
                     </CardContent>
                     <CardFooter className="gap-4">
-                        <SubmitButton>Change Password</SubmitButton>
+                        <SubmitButton>Change password</SubmitButton>
                         <p className="text-red-500">{state?.message}</p>
                     </CardFooter>
                 </form>

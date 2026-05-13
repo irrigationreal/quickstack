@@ -86,8 +86,8 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
 
     useEffect(() => {
         if (state.status === 'success') {
-            toast.success('Container Configuration Saved', {
-                description: "Click \"deploy\" to apply the changes to your app.",
+            toast.success('Container configuration saved.', {
+                description: 'Click "Deploy" to apply the changes to your app.',
             });
         }
         FormUtils.mapValidationErrorsToForm<typeof appContainerConfigZodModel>(state, form)
@@ -98,7 +98,7 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Container Configuration</CardTitle>
+                <CardTitle>Container configuration</CardTitle>
                 <CardDescription>
                     Override image defaults only when your workload needs custom startup behavior or Linux security settings.
                 </CardDescription>
@@ -241,7 +241,7 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
                                         render={({ field }) => (
                                             <FormItem>
                                                 <LabelWithHint hint="Linux user ID for the main container process. Maps to runAsUser in the Kubernetes securityContext.">
-                                                    Run As User
+                                                    Run as user
                                                 </LabelWithHint>
                                                 <FormControl>
                                                     <Input
@@ -262,7 +262,7 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
                                         render={({ field }) => (
                                             <FormItem>
                                                 <LabelWithHint hint="Linux group ID for the main container process. Maps to runAsGroup in the Kubernetes securityContext.">
-                                                    Run As Group
+                                                    Run as group
                                                 </LabelWithHint>
                                                 <FormControl>
                                                     <Input
@@ -283,7 +283,7 @@ export default function GeneralAppContainerConfig({ app, readonly }: {
                                         render={({ field }) => (
                                             <FormItem>
                                                 <LabelWithHint hint="Supplemental group ID applied at pod level so mounted volumes can be owned and writable by that group. Maps to fsGroup in the Kubernetes securityContext.">
-                                                    FS Group
+                                                    FS group
                                                 </LabelWithHint>
                                                 <FormControl>
                                                     <Input

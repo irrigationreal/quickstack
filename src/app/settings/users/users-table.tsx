@@ -33,12 +33,12 @@ export default function UsersTable({ users, userGroups, session }: {
 
     const asyncDeleteItem = async (id: string) => {
         const confirm = await openDialog({
-            title: "Delete User",
-            description: "Do you really want to delete this user?",
+            title: "Delete user",
+            description: "Do you want to delete this user?",
             okButton: "Delete",
         });
         if (confirm) {
-            await Toast.fromAction(() => deleteUser(id), 'Deleting User...', 'User deleted successfully');
+            await Toast.fromAction(() => deleteUser(id), 'Deleting user...', 'User deleted successfully.');
         }
     };
 
@@ -47,13 +47,15 @@ export default function UsersTable({ users, userGroups, session }: {
         const deletableUsers = selectedUsers.filter(user => session.email !== user.email);
 
         if (deletableUsers.length === 0) {
-            toast.error("No deletable users selected (admins cannot be deleted)");
+            toast.error("No deletable users selected. Admins cannot be deleted.");
             return;
         }
 
+        const deletableUsersLabel = `${deletableUsers.length} user${deletableUsers.length === 1 ? '' : 's'}`;
+
         const confirm = await openDialog({
-            title: "Delete Selected Users",
-            description: `Do you really want to delete ${deletableUsers.length} user(s)?`,
+            title: "Delete selected users",
+            description: `Do you want to delete ${deletableUsersLabel}?`,
             okButton: "Delete",
         });
 
@@ -63,9 +65,9 @@ export default function UsersTable({ users, userGroups, session }: {
                 for (const user of deletableUsers) {
                     await Actions.run(() => deleteUser(user.id));
                 }
-                toast.success(`Successfully deleted ${deletableUsers.length} user(s)`);
+                toast.success(`Deleted ${deletableUsersLabel}.`);
             } catch (error) {
-                toast.error("Error deleting users");
+                toast.error("Could not delete users.");
                 console.error(error);
             }
         }
@@ -74,10 +76,10 @@ export default function UsersTable({ users, userGroups, session }: {
     return <>
         <SimpleDataTable columns={[
             ['id', 'ID', false],
-            ['email', 'Mail', true],
+            ['email', 'Email', true],
             ['userGroup.name', 'Group', true],
-            ["createdAt", "Created At", true, (item) => formatDateTime(item.createdAt)],
-            ["updatedAt", "Updated At", false, (item) => formatDateTime(item.updatedAt)],
+            ["createdAt", "Created at", true, (item) => formatDateTime(item.createdAt)],
+            ["updatedAt", "Updated at", false, (item) => formatDateTime(item.updatedAt)],
         ]}
             data={users}
             showSelectCheckbox={true}
@@ -103,19 +105,19 @@ export default function UsersTable({ users, userGroups, session }: {
         />
         <div className="flex gap-4">
             <UserEditOverlay userGroups={userGroups}>
-                <Button variant="secondary"><Plus /> Create User</Button>
+                <Button variant="secondary"><Plus /> Create user</Button>
             </UserEditOverlay>
             {selectedUsers.length > 0 && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline"> Actions <ChevronDown /></Button>
+                        <Button variant="outline">Actions <ChevronDown /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <DropdownMenuItem onClick={() => setIsRoleDialogOpen(true)}>
-                            <UserPlus />   Assign Group
+                            <UserPlus /> Assign group
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleBulkDelete}>
-                            <Trash2 /> Delete Selected
+                            <Trash2 /> Delete selected
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

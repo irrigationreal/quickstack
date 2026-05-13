@@ -43,9 +43,9 @@ export default function BuildsTable({
 
     const handleDeleteBuild = async (buildName: string) => {
         const confirm = await openConfirmDialog({
-            title: "Stop Build",
-            description: "The build will be stopped and removed. Are you sure you want to stop this build?",
-            okButton: "Stop & Remove Build",
+            title: "Stop build",
+            description: "This will stop the build and remove it. Do you want to continue?",
+            okButton: "Stop and remove build",
         });
         if (confirm) {
             await Toast.fromAction(() => deleteBuildAction(buildName));
@@ -79,13 +79,13 @@ export default function BuildsTable({
                                 </Link>
                             </span>
                         )],
-                        ['name', 'Build Job', false],
-                        ['buildMethod', 'Build Method', true, (item) => (
+                        ['name', 'Build job', false],
+                        ['buildMethod', 'Build method', true, (item) => (
                             <span className="text-muted-foreground text-sm">
                                 {item.buildMethod === 'DOCKERFILE' ? 'Dockerfile' : 'Railpack'}
                             </span>
                         )],
-                        ['startTime', 'Started At', true, (item) => formatDateTime(item.startTime)],
+                        ['startTime', 'Started at', true, (item) => formatDateTime(item.startTime)],
                         ['completionTime', 'Duration', true, (item) => {
                             const start = new Date(item.startTime).getTime();
                             const end = item.completionTime ? new Date(item.completionTime).getTime() : Date.now();
@@ -97,10 +97,10 @@ export default function BuildsTable({
                                 : `${seconds}s`;
                             return <span className="text-muted-foreground text-sm">{item.status === 'UNKNOWN' ? '—' : label}</span>;
                         }],
-                        ['gitCommit', 'Git Commit', false, (item) => (
+                        ['gitCommit', 'Git commit', false, (item) => (
                             <ShortCommitHash>{item.gitCommit}</ShortCommitHash>
                         )],
-                        ['gitCommitMessage', 'Commit Message', true, (item) => (
+                        ['gitCommitMessage', 'Commit message', true, (item) => (
                             <span className="text-muted-foreground text-sm">{item.gitCommitMessage ?? ''}</span>
                         )],
                     ]}
@@ -110,12 +110,12 @@ export default function BuildsTable({
                             <div className="flex-1" />
                             {item.deploymentId && (
                                 <Button variant="secondary" onClick={() => setSelectedBuildForLogs(item)}>
-                                    Show Logs
+                                    Show logs
                                 </Button>
                             )}
                             {(item.status === 'RUNNING' || item.status === 'PENDING') && UserGroupUtils.sessionHasWriteAccessForApp(session, item.appId) && (
                                 <Button variant="destructive" onClick={() => handleDeleteBuild(item.name)}>
-                                    Stop Build
+                                    Stop build
                                 </Button>
                             )}
                         </div>

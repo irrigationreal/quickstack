@@ -45,9 +45,9 @@ export default function BuildsTab({
 
     const deleteBuildClick = async (buildName: string) => {
         const confirm = await openDialog({
-            title: "Delete Build",
-            description: "The build will be stopped and removed. Are you sure you want to stop this build?",
-            okButton: "Stop & Remove Build"
+            title: "Delete build",
+            description: "This will stop the build and remove it. Do you want to continue?",
+            okButton: "Stop and remove build"
         });
         if (confirm) {
             await Toast.fromAction(() => deleteBuild(buildName));
@@ -73,23 +73,23 @@ export default function BuildsTab({
         <Card>
             <CardHeader>
                 <CardTitle>Deployments</CardTitle>
-                <CardDescription>This is an overview of the last deplyoments for this App.</CardDescription>
+                <CardDescription>Overview of the most recent deployments for this app.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {!appBuilds ? <FullLoadingSpinner /> :
                     <SimpleDataTable columns={[
-                        ['replicasetName', 'Deployment Name', false],
-                        ['buildJobName', 'Build Job Name', false],
-                        ['deploymentId', 'Deployment Id', false],
+                        ['replicasetName', 'Deployment name', false],
+                        ['buildJobName', 'Build job name', false],
+                        ['deploymentId', 'Deployment ID', false],
                         ['status', 'Status', true, (item) => <DeploymentStatusBadge>{item.status}</DeploymentStatusBadge>],
-                        ['buildMethod', 'Build Method', true, (item) => (
+                        ['buildMethod', 'Build method', true, (item) => (
                             <span className="text-muted-foreground text-sm">
                                 {item.buildMethod ? (item.buildMethod === 'DOCKERFILE' ? 'Dockerfile' : 'Railpack') : '—'}
                             </span>
                         )],
-                        ["startTime", "Started At", true, (item) => formatDateTime(item.createdAt)],
-                        ['gitCommit', 'Git Commit', true, (item) => <ShortCommitHash>{item.gitCommit}</ShortCommitHash>],
-                        ['gitCommitMessage', 'Commit Message', true, (item) => <span className="text-muted-foreground text-sm">{item.gitCommitMessage ?? ''}</span>],
+                        ["startTime", "Started at", true, (item) => formatDateTime(item.createdAt)],
+                        ['gitCommit', 'Git commit', true, (item) => <ShortCommitHash>{item.gitCommit}</ShortCommitHash>],
+                        ['gitCommitMessage', 'Commit message', true, (item) => <span className="text-muted-foreground text-sm">{item.gitCommitMessage ?? ''}</span>],
                     ]}
                         data={appBuilds}
                         hideSearchBar={true}
@@ -97,8 +97,8 @@ export default function BuildsTab({
                             return <>
                                 <div className="flex gap-4">
                                     <div className="flex-1"></div>
-                                    {item.deploymentId && <Button variant="secondary" onClick={() => setSelectedDeploymentForLogs(item)}>Show Logs</Button>}
-                                    {role === RolePermissionEnum.READWRITE && item.buildJobName && item.status === 'BUILDING' && <Button variant="destructive" onClick={() => deleteBuildClick(item.buildJobName!)}>Stop Build</Button>}
+                                    {item.deploymentId && <Button variant="secondary" onClick={() => setSelectedDeploymentForLogs(item)}>Show logs</Button>}
+                                    {role === RolePermissionEnum.READWRITE && item.buildJobName && item.status === 'BUILDING' && <Button variant="destructive" onClick={() => deleteBuildClick(item.buildJobName!)}>Stop build</Button>}
                                 </div>
                             </>
                         }}
