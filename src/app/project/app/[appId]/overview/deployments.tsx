@@ -45,7 +45,7 @@ export default function BuildsTab({
 
     const deleteBuildClick = async (buildName: string) => {
         const confirm = await openDialog({
-            title: "Delete build",
+            title: "Stop build",
             description: "This will stop the build and remove it. Do you want to continue?",
             okButton: "Stop and remove build"
         });
