@@ -26,13 +26,13 @@ export function GitHttpsUrlStep({ formData, showCredentials, showToken, setShowT
                 <div className="grid gap-4 md:grid-cols-2">
                     <IconInput
                         icon={User}
-                        label="Git Username"
+                        label="Git username"
                         value={formData.gitUsername ?? ''}
                         onChange={(event) => onChange({ gitUsername: event.target.value })}
                     />
                     <SecretInput
                         icon={LockKeyhole}
-                        label="Git Password or Token"
+                        label="Git password or token"
                         value={formData.gitToken ?? ''}
                         visible={showToken}
                         onVisibleChange={setShowToken}

@@ -18,8 +18,8 @@ export function PublicDeployKeyDialog({ publicKey }: { publicKey: string }) {
     return (
         <>
             <DialogHeader>
-                <DialogTitle>Public Deploy Key</DialogTitle>
-                <DialogDescription>Add this public key as a deploy key in your Git provider.</DialogDescription>
+                <DialogTitle>Public deploy key</DialogTitle>
+                <DialogDescription>Add this public key to your Git provider as a deploy key.</DialogDescription>
             </DialogHeader>
             <Textarea readOnly value={publicKey} className="min-h-32 font-mono text-xs" />
             <DialogFooter>

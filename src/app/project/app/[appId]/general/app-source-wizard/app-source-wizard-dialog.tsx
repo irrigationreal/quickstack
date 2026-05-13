@@ -103,7 +103,7 @@ export function AppSourceWizardDialog({ app, gitSshPublicKey }: {
             return true;
         } catch (error) {
             setBranches([]);
-            setBranchError(error instanceof Error ? error.message : 'Branches could not be loaded.');
+            setBranchError(error instanceof Error ? error.message : 'Could not load branches.');
             return false;
         } finally {
             setIsLoadingBranches(false);
@@ -132,8 +132,8 @@ export function AppSourceWizardDialog({ app, gitSshPublicKey }: {
 
     const regenerateKey = async () => {
         const confirmed = await openConfirmDialog({
-            title: "Regenerate Deploy Key",
-            description: "This replaces the current app SSH key. Update the deploy key in your Git provider before deploying again.",
+            title: "Regenerate deploy key",
+            description: "This replaces the current SSH key for the app. Update the deploy key in your Git provider before the next deploy.",
             okButton: "Regenerate",
         });
         if (!confirmed) {
@@ -218,9 +218,9 @@ export function AppSourceWizardDialog({ app, gitSshPublicKey }: {
     };
 
     const save = async (deployAfterSave: boolean) => {
-        await Toast.fromAction(() => saveGeneralAppSourceInfo(null, formData, app.id), 'Source saved', 'Saving source...');
+        await Toast.fromAction(() => saveGeneralAppSourceInfo(null, formData, app.id), 'App source saved', 'Saving app source...');
         if (deployAfterSave) {
-            await Toast.fromAction(() => deploy(app.id, true), 'Deployment started', 'Staring deployment...');
+            await Toast.fromAction(() => deploy(app.id, true), 'Deployment started', 'Starting deployment...');
             closeDialog(true);
             router.refresh();
             router.push(`/project/app/${app.id}?tabName=overview`);
@@ -238,7 +238,7 @@ export function AppSourceWizardDialog({ app, gitSshPublicKey }: {
             <DialogHeader>
                 <DialogTitle>{currentTitle}</DialogTitle>
                 <DialogDescription>
-                    {step === 'summary' ? 'Review the app source before saving.' : 'Connect a source with the details QuickStack needs to deploy this app.'}
+                    {step === 'summary' ? 'Review the app source before saving.' : 'Enter the details QuickStack needs to deploy this app.'}
                 </DialogDescription>
             </DialogHeader>
 
@@ -355,15 +355,15 @@ export function AppSourceWizardDialog({ app, gitSshPublicKey }: {
 }
 
 function getStepTitle(step: StepId, sourceType: AppSourceInfoInputModel['sourceType']) {
-    if (step === 'source') return 'Choose source';
-    if (step === 'git-url') return 'Connect Git HTTPS';
-    if (step === 'ssh-url') return 'Connect Git SSH';
-    if (step === 'branch') return 'Choose Git Branch';
-    if (step === 'build-method') return 'Choose Build Method';
-    if (step === 'dockerfile') return 'Confirm Dockerfile Path';
-    if (step === 'container-image') return 'Connect Docker Container Image';
-    if (step === 'summary') return `${sourceTypeLabels[sourceType as SourceType]} Summary`;
-    return 'Connect App Source';
+    if (step === 'source') return 'Choose a source';
+    if (step === 'git-url') return 'Connect Git over HTTPS';
+    if (step === 'ssh-url') return 'Connect Git over SSH';
+    if (step === 'branch') return 'Choose a Git branch';
+    if (step === 'build-method') return 'Choose a build method';
+    if (step === 'dockerfile') return 'Confirm the Dockerfile path';
+    if (step === 'container-image') return 'Connect a container image';
+    if (step === 'summary') return `${sourceTypeLabels[sourceType as SourceType]} summary`;
+    return 'Connect app source';
 }
 
 function getNextDisabled(step: StepId, formData: AppSourceInfoInputModel, publicKey: string | undefined, isLoadingBranches: boolean, isEnsuringKey: boolean, isDetectingDockerfile: boolean) {

@@ -5,9 +5,9 @@ export type StepId = 'source' | 'git-url' | 'ssh-url' | 'branch' | 'build-method
 export type SourceFormPatch = Partial<AppSourceInfoInputModel>;
 
 export const sourceTypeLabels: Record<SourceType, string> = {
-    GIT: 'Git HTTPS',
-    GIT_SSH: 'Git SSH',
-    CONTAINER: 'Docker Container Image',
+    GIT: 'Git over HTTPS',
+    GIT_SSH: 'Git over SSH',
+    CONTAINER: 'Container image',
 };
 
 export const buildMethodLabels: Record<AppBuildMethod, string> = {

@@ -23,7 +23,7 @@ export function GitSshUrlStep({ formData, publicKey, isEnsuringKey, isLoadingBra
             <Alert>
                 <KeyRound className="h-4 w-4" />
                 <AlertTitle>Add this deploy key to your Git provider</AlertTitle>
-                <AlertDescription>Some Git providers require a unique deploy key per repository. Regenerate the key if this key is already used elsewhere.</AlertDescription>
+                <AlertDescription>Some Git providers require a unique deploy key for each repository. Regenerate this key if it is already used somewhere else.</AlertDescription>
             </Alert>
             <IconInput
                 icon={LinkIcon}
@@ -35,7 +35,7 @@ export function GitSshUrlStep({ formData, publicKey, isEnsuringKey, isLoadingBra
             {!!formData.gitUrl?.trim() && (
                 <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                        <Label>Public Deploy Key</Label>
+                        <Label>Public deploy key</Label>
                         <div className="flex gap-2">
                             <Button type="button" size="sm" variant="outline" onClick={onCopy} disabled={!publicKey}>
                                 <ClipboardCopy className="h-4 w-4" />
@@ -52,7 +52,7 @@ export function GitSshUrlStep({ formData, publicKey, isEnsuringKey, isLoadingBra
                         value={isEnsuringKey ? 'Generating deploy key...' : publicKey ?? ''}
                         className="min-h-28 font-mono text-xs"
                     />
-                    <Label className="text-muted-foreground font-normal">Make sure to add the deploy key to your Git repository with read access.</Label>
+                    <Label className="text-muted-foreground font-normal">Add this deploy key to the repository with read access.</Label>
                 </div>
             )}
             <BranchLoadingState loading={isLoadingBranches} error={branchError} onRetry={onRetry} />

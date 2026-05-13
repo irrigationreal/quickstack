@@ -14,7 +14,7 @@ export function ContainerImageStep({ formData, showCredentials, showPassword, se
         <div className="space-y-4">
             <IconInput
                 icon={Package}
-                label="Image Name"
+                label="Image"
                 placeholder="ghcr.io/user/imagename:latest"
                 value={formData.containerImageSource ?? ''}
                 onChange={(event) => onChange({ containerImageSource: event.target.value })}

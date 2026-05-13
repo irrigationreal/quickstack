@@ -7,8 +7,8 @@ export function BuildMethodStep({ value, onChange }: {
     onChange: (buildMethod: AppBuildMethod) => void;
 }) {
     const options: Array<{ value: AppBuildMethod; label: string; description: string; icon: LucideIcon }> = [
-        { value: 'DOCKERFILE', label: 'Dockerfile', description: 'Build with a Dockerfile from the repository.', icon: FileCode2 },
-        { value: 'RAILPACK', label: 'Railpack', description: 'Detect and build the app automatically.', icon: Package },
+        { value: 'DOCKERFILE', label: 'Dockerfile', description: 'Build from the Dockerfile in the repository.', icon: FileCode2 },
+        { value: 'RAILPACK', label: 'Railpack', description: 'Detect the app and build it automatically.', icon: Package },
     ];
 
     return (<div>

@@ -9,9 +9,9 @@ export function SourceTypeStep({ value, canUseGitSources, onChange }: {
     onChange: (sourceType: SourceType) => void;
 }) {
     const options: Array<{ value: SourceType; label: string; description: string; icon: LucideIcon; disabled?: boolean }> = [
-        { value: 'GIT', label: 'Git HTTPS', description: 'Clone a Git repository over HTTPS.', icon: GitBranch, disabled: !canUseGitSources },
-        { value: 'GIT_SSH', label: 'Git SSH', description: 'Use a deploy key for SSH repository access.', icon: KeyRound, disabled: !canUseGitSources },
-        { value: 'CONTAINER', label: 'Docker Container Image', description: 'Deploy an existing image from a registry.', icon: Container },
+        { value: 'GIT', label: 'Git over HTTPS', description: 'Clone a Git repository over HTTPS.', icon: GitBranch, disabled: !canUseGitSources },
+        { value: 'GIT_SSH', label: 'Git over SSH', description: 'Use a deploy key for SSH access to the repository.', icon: KeyRound, disabled: !canUseGitSources },
+        { value: 'CONTAINER', label: 'Container image', description: 'Deploy an existing image from a registry.', icon: Container },
     ];
 
     return (

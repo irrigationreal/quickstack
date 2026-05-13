@@ -35,8 +35,8 @@ export default function GeneralAppSource({ app, readonly, gitSshPublicKey }: {
         <Card>
             <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
-                    <CardTitle>Source</CardTitle>
-                    <CardDescription>Connect the source QuickStack should build or run.</CardDescription>
+                    <CardTitle>App source</CardTitle>
+                    <CardDescription>Choose the Git repository or container image QuickStack should deploy.</CardDescription>
                 </div>
                 {!readonly && configured && (
                     <Button type="button" variant="secondary" onClick={openSourceWizard}>
@@ -63,12 +63,12 @@ function EmptySourceState({ readonly, onConnect }: { readonly: boolean; onConnec
             </div>
             <div className="space-y-1">
                 <p className="font-medium">No app source connected</p>
-                <p className="max-w-md text-sm text-muted-foreground">Connect a Git repository or container image before deploying this app.</p>
+                <p className="max-w-md text-sm text-muted-foreground">Connect a Git repository or container image so QuickStack knows what to deploy.</p>
             </div>
             {!readonly && (
                 <Button type="button" onClick={onConnect}>
                     <LinkIcon className="h-4 w-4" />
-                    Connect App Source
+                    Connect app source
                 </Button>
             )}
         </div>
@@ -99,15 +99,15 @@ function ConfiguredSourceSummary({ app, gitSshPublicKey }: { app: AppExtendedMod
             <div className="grid gap-3 md:grid-cols-2">
                 {isGitSource && (
                     <>
-                        <ReadonlyInfo icon={GitBranch} label="Git Branch" value={app.gitBranch ?? 'Not configured'} />
+                        <ReadonlyInfo icon={GitBranch} label="Git branch" value={app.gitBranch ?? 'Not configured'} />
                         {sourceType === 'GIT' && (
-                            <ReadonlyInfo icon={LockKeyhole} label="Git Credentials" value={app.gitUsername || app.gitToken ? 'Credentials configured' : 'No credentials'} />
+                            <ReadonlyInfo icon={LockKeyhole} label="Git credentials" value={app.gitUsername || app.gitToken ? 'Configured' : 'Not configured'} />
                         )}
                         {sourceType === 'GIT_SSH' && (
                             <ReadonlyInfo
                                 icon={KeyRound}
-                                label="Deploy Key"
-                                value={gitSshPublicKey ? "Deploy key configured" : "No deploy key found"}
+                                label="Deploy key"
+                                value={gitSshPublicKey ? "Configured" : "Not configured"}
                                 action={gitSshPublicKey ? (
                                     <Button
                                         type="button"
@@ -120,16 +120,16 @@ function ConfiguredSourceSummary({ app, gitSshPublicKey }: { app: AppExtendedMod
                                 ) : undefined}
                             />
                         )}
-                        <ReadonlyInfo label="Build Method" value={buildMethodLabels[(app.buildMethod as AppBuildMethod) ?? 'RAILPACK']} />
+                        <ReadonlyInfo label="Build method" value={buildMethodLabels[(app.buildMethod as AppBuildMethod) ?? 'RAILPACK']} />
                         {app.buildMethod === 'DOCKERFILE' && (
-                            <ReadonlyInfo icon={FileCode2} label="Dockerfile Path" value={app.dockerfilePath || defaultDockerfilePath} />
+                            <ReadonlyInfo icon={FileCode2} label="Dockerfile path" value={app.dockerfilePath || defaultDockerfilePath} />
                         )}
                     </>
                 )}
                 {sourceType === 'CONTAINER' && (
                     <>
-                        <ReadonlyInfo icon={Package} label="Image Name" value={app.containerImageSource ?? 'Not configured'} />
-                        <ReadonlyInfo icon={LockKeyhole} label="Registry Credentials" value={app.containerRegistryUsername || app.containerRegistryPassword ? 'Credentials configured' : 'No credentials'} />
+                        <ReadonlyInfo icon={Package} label="Image" value={app.containerImageSource ?? 'Not configured'} />
+                        <ReadonlyInfo icon={LockKeyhole} label="Registry credentials" value={app.containerRegistryUsername || app.containerRegistryPassword ? 'Configured' : 'Not configured'} />
                     </>
                 )}
             </div>

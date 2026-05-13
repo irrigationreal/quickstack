@@ -12,12 +12,12 @@ export function DockerfilePathStep({ value, isDetecting, onChange }: {
             {isDetecting && (
                 <div className="flex min-h-20 items-center justify-center gap-2 rounded-md border text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Detecting Dockerfile...
+                    Detecting the Dockerfile path...
                 </div>
             )}
             <IconInput
                 icon={FileCode2}
-                label="Dockerfile Path"
+                label="Dockerfile path"
                 placeholder={defaultDockerfilePath}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
