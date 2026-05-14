@@ -44,6 +44,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
         status: 'success',
         appId: app.id,
         projectId: app.projectId,
-        releases,
+        releases: releases.map((release, index) => ({
+            ...release,
+            release: {
+                id: release.deploymentId,
+                deploymentId: release.deploymentId,
+                image: undefined,
+                strategy: 'source-tar',
+                status: release.status === 'SUCCESS' ? 'healthy' : release.status === 'FAILED' ? 'failed' : 'progressing',
+                createdAt: release.createdAt instanceof Date ? release.createdAt.toISOString() : String(release.createdAt),
+                healthy: release.status === 'SUCCESS',
+                message: release.status,
+                priorReleaseId: releases[index + 1]?.deploymentId,
+            },
+        })),
     });
 }

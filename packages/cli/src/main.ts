@@ -11,6 +11,7 @@ import { launch } from './commands/launch';
 import { deploy } from './commands/deploy';
 import { plan } from './commands/plan';
 import { build } from './commands/build';
+import { doctor } from './commands/doctor';
 import { secrets } from './commands/secrets';
 import { config } from './commands/config';
 import { postgres } from './commands/postgres';
@@ -33,6 +34,7 @@ Usage:
   quickstack apps list [--json]
   quickstack plan [path] [--json]
   quickstack build [path] --app <appId> [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--json]
+  quickstack doctor [appId] [--json]
   quickstack launch [path] [--plan|--dry-run] [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--image <image>] [--project <id>] [--name <name>] [--json]
   quickstack deploy [path] [--plan|--dry-run] [--app <id>] [--json]
   quickstack detect [path]
@@ -67,6 +69,7 @@ async function main() {
   if (ctx.command === 'detect') return detect(ctx);
   if (ctx.command === 'plan') return plan(ctx);
   if (ctx.command === 'build') return build(ctx);
+  if (ctx.command === 'doctor') return doctor(ctx);
   if (ctx.command === 'package') return packageCommand(ctx);
   if (ctx.command === 'launch') return launch(ctx);
   if (ctx.command === 'deploy') return deploy(ctx);

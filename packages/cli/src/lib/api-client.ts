@@ -7,6 +7,8 @@ import type { AgentMeResponse } from '../../../../src/shared/model/agent-me.mode
 import type { AgentAppListResponse } from '../../../../src/shared/model/agent-app-list.model';
 import type { AgentLaunchPlan, AgentLaunchPlanRequest } from '../../../../src/shared/model/agent-launch-plan.model';
 import type { BuildCapabilities, BuildCreateRequest, BuildResult } from '../../../../src/shared/model/agent-build-strategy.model';
+import type { DeploymentStatus } from '../../../../src/shared/model/agent-release.model';
+import type { DoctorResponse } from '../../../../src/shared/model/agent-doctor.model';
 
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
 export const CHUNK_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
@@ -75,6 +77,25 @@ export function createBuild(appId: string, payload: BuildCreateRequest) {
 
 export function deployImage(appId: string, buildResult: BuildResult) {
   return request(`/api/v1/agent/apps/${encodeURIComponent(appId)}/deploy`, { method: 'POST', body: JSON.stringify({ buildResult }) });
+}
+
+export function pollDeploymentStatus(appId: string, deploymentId: string) {
+  return request<DeploymentStatus>(`/api/v1/agent/apps/${encodeURIComponent(appId)}/deployments/${encodeURIComponent(deploymentId)}/status`);
+}
+
+export async function streamLogs(appId: string, opts: { tail?: string } = {}) {
+  const { url, apiKey } = await ensureApiConfig();
+  const query = opts.tail ? `?tail=${encodeURIComponent(opts.tail)}` : '';
+  const response = await fetch(`${url}/api/v1/agent/apps/${encodeURIComponent(appId)}/logs/stream${query}`, {
+    headers: { authorization: `Bearer ${apiKey}`, 'X-QuickStack-CLI-Version': CLI_VERSION },
+  });
+  if (!response.ok) throw new Error(`QuickStack API ${response.status}: ${await response.text()}`);
+  return response.body;
+}
+
+export function getDoctor({ appId }: { appId?: string } = {}) {
+  const query = appId ? `?appId=${encodeURIComponent(appId)}` : '';
+  return request<DoctorResponse>(`/api/v1/agent/doctor${query}`);
 }
 
 export async function uploadBuildTar(appId: string, tarPath: string, metadata: Record<string, unknown>) {
