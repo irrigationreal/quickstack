@@ -35,8 +35,8 @@ export default function AppResourceMonitoring({
             const data = await Actions.run(() => getMonitoringForAllApps());
             setUpdatedAppUsage(data);
         } catch (ex) {
-            toast.error('An error occurred while fetching current volume usage');
-            console.error('An error occurred while fetching volume nodes', ex);
+            toast.error('An error occurred while fetching app resource usage');
+            console.error('An error occurred while fetching app resource usage', ex);
         }
     }
 
