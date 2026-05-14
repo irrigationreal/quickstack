@@ -1,3 +1,7 @@
+import { DEFAULT_REGISTRY_TOKEN_ISSUER, REGISTRY_TOKEN_SERVICE } from "../services/registry-auth-config";
+import paramService, { ParamService } from "../services/param.service";
+import registryTokenSigningService from "../services/registry-token-signing.service";
+
 interface OCIManifest {
     schemaVersion: number;
     mediaType: string;
@@ -26,11 +30,12 @@ class RegistryApiAdapter {
 
     async getAllImages() {
 
+        const token = await this.internalBearerToken();
         const response = await fetch(`${this.registryBaseUrl}/v2/_catalog`, {
             cache: 'no-cache',
             method: 'GET',
             headers: {
-
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -43,11 +48,12 @@ class RegistryApiAdapter {
 
     async listTagsForImage(imageName: string) {
 
+        const token = await this.internalBearerToken(imageName);
         const response = await fetch(`${this.registryBaseUrl}/v2/${imageName}/tags/list`, {
             cache: 'no-cache',
             method: 'GET',
             headers: {
-
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -92,11 +98,29 @@ class RegistryApiAdapter {
         return [digest, await response.json()] as [string, OCIManifest];
     }
 
+    private async internalBearerToken(repository?: string, actions = ['pull']) {
+        const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
+        if (!directAuthEnabled) return undefined;
+        const issuer = await paramService.getString(ParamService.REGISTRY_TOKEN_ISSUER, DEFAULT_REGISTRY_TOKEN_ISSUER) ?? DEFAULT_REGISTRY_TOKEN_ISSUER;
+        const now = Math.floor(Date.now() / 1000);
+        return await registryTokenSigningService.signRs256({
+            iss: issuer,
+            sub: 'quickstack-server',
+            aud: REGISTRY_TOKEN_SERVICE,
+            iat: now,
+            nbf: now - 30,
+            exp: now + 600,
+            access: repository ? [{ type: 'repository', name: repository, actions }] : [{ type: 'registry', name: 'catalog', actions: ['*'] }],
+        });
+    }
+
     private async manifestRequest(repository: string, tag: string) {
+        const token = await this.internalBearerToken(repository);
         const response = await fetch(`${this.registryBaseUrl}/v2/${repository}/manifests/${tag}`, {
             cache: 'no-cache',
             method: 'GET',
             headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 "Accept": [
                     'application/vnd.oci.image.manifest.v1+json',
                     'application/vnd.oci.image.index.v1+json',
@@ -117,9 +141,11 @@ class RegistryApiAdapter {
     }
 
     private async deleteBlob(repository: string, digest: string) {
+        const token = await this.internalBearerToken(repository, ['pull', 'delete']);
         const response = await fetch(`${this.registryBaseUrl}/v2/${repository}/blobs/${digest}`, {
             cache: 'no-cache',
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 
         await this.checkIfResponseIsOk(response);
@@ -127,9 +153,11 @@ class RegistryApiAdapter {
     }
 
     private async deleteManifest(repository: string, digest: string) {
+        const token = await this.internalBearerToken(repository, ['pull', 'delete']);
         const response = await fetch(`${this.registryBaseUrl}/v2/${repository}/manifests/${digest}`, {
             cache: 'no-cache',
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 
         await this.checkIfResponseIsOk(response);

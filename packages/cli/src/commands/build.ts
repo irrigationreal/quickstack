@@ -10,9 +10,9 @@ import { runRemoteBuilder } from '../lib/build-strategies/remote-builder';
 import { runSourceTar } from '../lib/build-strategies/source-tar';
 import { resolveApp } from './apps';
 
-function defaultDockerImage(appId: string, registry?: string) {
-  if (!registry) throw new Error('local-docker requires --image <registry/repository:tag> because the server did not advertise a registry URL.');
-  return `${registry.replace(/\/$/, '')}/${appId}:quickstack-${Date.now()}`;
+function defaultDockerImage(appId: string, registry?: { url?: string; repository?: string }) {
+  if (!registry?.url) throw new Error('local-docker requires --image <registry/repository:tag> because the server did not advertise a registry URL.');
+  return `${registry.url.replace(/\/$/, '')}/${registry.repository || appId}:quickstack-${Date.now()}`;
 }
 
 function uploadMode(plan: Awaited<ReturnType<typeof createPlan>>['plan']) {
@@ -62,7 +62,7 @@ export async function executeBuildStrategy(ctx: CliContext, appId: string, root:
     return runRemoteBuilder(appId, { buildSecrets: options.buildSecrets });
   }
   if (strategy.strategy === 'local-docker') {
-    return runLocalDocker(appId, serviceRoot, image || defaultDockerImage(appId, effectiveCapabilities.registry?.url), { ...options, tunnel: registryTunnel });
+    return runLocalDocker(appId, serviceRoot, image || defaultDockerImage(appId, effectiveCapabilities.registry), { ...options, tunnel: registryTunnel, registryAuth: effectiveCapabilities.registry?.auth });
   }
   const appProjectId = projectId ?? (await resolveApp(appId)).projectId;
   return runSourceTar(appId, serviceRoot, { projectId: appProjectId, mode: uploadMode(plan.plan), dockerfilePath: options.dockerfile, serviceRoot: plan.plan.serviceRoot || '.', buildSecrets: options.buildSecrets });

@@ -19,11 +19,26 @@ export const BuildResultZodModel = z.object({
     buildId: z.string().optional(),
 });
 
+export const RegistryAuthZodModel = z.object({
+    type: z.literal('token'),
+    realm: z.string(),
+    service: z.string(),
+    issuer: z.string(),
+});
+
 export const BuildCapabilitiesZodModel = z.object({
     strategies: z.array(BuildStrategyZodModel),
     registry: z.object({
         url: z.string(),
+        internalUrl: z.string().optional(),
+        repository: z.string().optional(),
         pushCredentials: z.boolean().optional(),
+        auth: RegistryAuthZodModel.optional(),
+        legacyTunnel: z.object({
+            localUrl: z.string().optional(),
+            explicitOnly: z.literal(true),
+        }).optional(),
+        unavailableReason: z.string().optional(),
     }).optional(),
     remoteBuilder: z.boolean().default(false),
 });

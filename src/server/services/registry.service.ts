@@ -1,5 +1,5 @@
 import k3s from "../adapter/kubernetes-api.adapter";
-import { V1ConfigMapList, V1Deployment, V1DeploymentList, V1NetworkPolicy, V1NetworkPolicyList, V1PersistentVolumeClaimList, V1ServiceList } from "@kubernetes/client-node";
+import { V1ConfigMapList, V1Deployment, V1DeploymentList, V1Ingress, V1IngressList, V1NetworkPolicy, V1NetworkPolicyList, V1PersistentVolumeClaimList, V1ServiceList } from "@kubernetes/client-node";
 import namespaceService from "./namespace.service";
 import podService from "./pod.service";
 import registryApiAdapter from "../adapter/registry-api.adapter";
@@ -8,6 +8,8 @@ import { Constants } from "@/shared/utils/constants";
 import { S3Target } from "@prisma/client";
 import s3TargetService from "./s3-target.service";
 import clusterService from "./cluster.service";
+import { DEFAULT_REGISTRY_TOKEN_ISSUER, REGISTRY_TOKEN_SERVICE } from "./registry-auth-config";
+import registryTokenSigningService from "./registry-token-signing.service";
 import { ServiceException } from "@/shared/model/service.exception.model";
 
 const REGISTRY_NODE_PORT = 30100;
@@ -18,10 +20,73 @@ const REGISTRY_CONFIG_MAP_NAME = 'registry-config-map';
 const REGISTRY_NETWORK_POLICY_NAME = 'registry-ingress-policy';
 export const BUILD_NAMESPACE = "registry-and-build";
 export const REGISTRY_URL_EXTERNAL = `localhost:${REGISTRY_NODE_PORT}`;
-export const REGISTRY_URL_INTERNAL = `${REGISTRY_SVC_NAME}.${BUILD_NAMESPACE}.svc.cluster.local:${REGISTRY_CONTAINER_PORT}`
+export const REGISTRY_URL_INTERNAL = `${REGISTRY_SVC_NAME}.${BUILD_NAMESPACE}.svc.cluster.local:${REGISTRY_CONTAINER_PORT}`;
+const REGISTRY_INGRESS_NAME = 'registry-ingress';
+
+function dockerRepositoryForApp(appId: string) {
+    const repository = appId.toLowerCase();
+    if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(repository)) {
+        throw new ServiceException('App id cannot be used as a Docker registry repository name.');
+    }
+    return repository;
+}
+
+function stripProtocol(value: string) {
+    return value.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
 
 
 class RegistryService {
+
+    repositoryForApp(appId: string) {
+        return dockerRepositoryForApp(appId);
+    }
+
+    async getTokenIssuer() {
+        return await paramService.getString(ParamService.REGISTRY_TOKEN_ISSUER, DEFAULT_REGISTRY_TOKEN_ISSUER) ?? DEFAULT_REGISTRY_TOKEN_ISSUER;
+    }
+
+    async getRegistryMetadataForApp(app: { id: string; projectId: string }) {
+        const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
+        const repository = this.repositoryForApp(app.id);
+        if (!directAuthEnabled) {
+            return {
+                url: REGISTRY_URL_EXTERNAL,
+                internalUrl: REGISTRY_URL_INTERNAL,
+                repository,
+                pushCredentials: false,
+                legacyTunnel: { localUrl: REGISTRY_URL_EXTERNAL, explicitOnly: true as const },
+                unavailableReason: 'Direct registry auth is not enabled on this QuickStack install.',
+            };
+        }
+
+        const registryHostname = await paramService.getString(ParamService.REGISTRY_HOSTNAME);
+        const quickStackHostname = await paramService.getString(ParamService.QS_SERVER_HOSTNAME);
+        if (!registryHostname || !quickStackHostname) {
+            return {
+                url: REGISTRY_URL_EXTERNAL,
+                internalUrl: REGISTRY_URL_INTERNAL,
+                repository,
+                pushCredentials: false,
+                legacyTunnel: { localUrl: REGISTRY_URL_EXTERNAL, explicitOnly: true as const },
+                unavailableReason: 'Direct registry auth requires registryHostname and qsServerHostname parameters.',
+            };
+        }
+
+        const issuer = await this.getTokenIssuer();
+        return {
+            url: stripProtocol(registryHostname),
+            internalUrl: REGISTRY_URL_INTERNAL,
+            repository,
+            pushCredentials: true,
+            auth: {
+                type: 'token' as const,
+                realm: `https://${stripProtocol(quickStackHostname)}/api/v1/registry/token`,
+                service: REGISTRY_TOKEN_SERVICE,
+                issuer,
+            },
+        };
+    }
 
     async purgeRegistryImages() {
         const allImages = await registryApiAdapter.getAllImages();
@@ -88,13 +153,15 @@ class RegistryService {
         // Always update the ConfigMap and NetworkPolicy so storage and registry ingress settings are never stale
         await this.createOrUpdateRegistryConfigMap(s3Target);
         await this.createOrUpdateRegistryNetworkPolicy();
+        await this.createOrUpdateRegistryIngress();
 
         const deployments = await k3s.apps.listNamespacedDeployment(BUILD_NAMESPACE) as { body: V1DeploymentList };
-        if (deployments.body.items.length > 0 && !forceDeploy) {
+        const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
+        if (deployments.body.items.length > 0 && !forceDeploy && !directAuthEnabled) {
             return;
         }
 
-        console.log("(Re)deploying registry because it is not deployed or forced...");
+        console.log("(Re)deploying registry because it is not deployed, forced, or auth config must be reloaded...");
         console.log(`Registry storage location is set to ${registryLocation}.`);
 
         if (useLocalStorage) {
@@ -177,6 +244,60 @@ class RegistryService {
         await k3s.core.createNamespacedService(BUILD_NAMESPACE, serviceManifest);
     }
 
+    private async createOrUpdateRegistryIngress() {
+        const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
+        const registryHostname = await paramService.getString(ParamService.REGISTRY_HOSTNAME);
+        const existingIngresses = await k3s.network.listNamespacedIngress(BUILD_NAMESPACE) as { body: V1IngressList };
+        const existingIngress = existingIngresses.body.items.find(ingress => ingress.metadata?.name === REGISTRY_INGRESS_NAME);
+        if (!directAuthEnabled || !registryHostname) {
+            if (existingIngress) {
+                await k3s.network.deleteNamespacedIngress(REGISTRY_INGRESS_NAME, BUILD_NAMESPACE);
+            }
+            return;
+        }
+
+        const ingressManifest: V1Ingress = {
+            apiVersion: 'networking.k8s.io/v1',
+            kind: 'Ingress',
+            metadata: {
+                name: REGISTRY_INGRESS_NAME,
+                namespace: BUILD_NAMESPACE,
+                annotations: {
+                    'cert-manager.io/cluster-issuer': 'letsencrypt-production',
+                    'traefik.ingress.kubernetes.io/router.entrypoints': 'websecure',
+                    'traefik.ingress.kubernetes.io/router.tls': 'true',
+                    'traefik.ingress.kubernetes.io/proxy-body-size': '0',
+                    'traefik.ingress.kubernetes.io/read-timeout': '600s',
+                    'traefik.ingress.kubernetes.io/write-timeout': '600s',
+                },
+            },
+            spec: {
+                tls: [{ hosts: [stripProtocol(registryHostname)], secretName: 'registry-tls' }],
+                rules: [{
+                    host: stripProtocol(registryHostname),
+                    http: {
+                        paths: [{
+                            path: '/',
+                            pathType: 'Prefix',
+                            backend: {
+                                service: {
+                                    name: REGISTRY_SVC_NAME,
+                                    port: { number: REGISTRY_CONTAINER_PORT },
+                                },
+                            },
+                        }],
+                    },
+                }],
+            },
+        };
+
+        if (existingIngress) {
+            await k3s.network.replaceNamespacedIngress(REGISTRY_INGRESS_NAME, BUILD_NAMESPACE, ingressManifest);
+            return;
+        }
+        await k3s.network.createNamespacedIngress(BUILD_NAMESPACE, ingressManifest);
+    }
+
     private async createOrUpdateRegistryNetworkPolicy() {
         console.log("Creating Registry NetworkPolicy...");
         const networkPolicyManifest: V1NetworkPolicy = {
@@ -208,6 +329,18 @@ class RegistryService {
                                 podSelector: {
                                     matchLabels: {
                                         app: 'quickstack',
+                                    },
+                                },
+                            },
+                            {
+                                namespaceSelector: {
+                                    matchLabels: {
+                                        'kubernetes.io/metadata.name': 'kube-system',
+                                    },
+                                },
+                                podSelector: {
+                                    matchLabels: {
+                                        'app.kubernetes.io/name': 'traefik',
                                     },
                                 },
                             },
@@ -315,6 +448,32 @@ class RegistryService {
         await k3s.apps.createNamespacedDeployment(BUILD_NAMESPACE, deploymentManifest);
     }
 
+    private async registryAuthConfig() {
+        const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
+        if (!directAuthEnabled) {
+            return { config: '', jwks: undefined as string | undefined };
+        }
+        const issuer = await this.getTokenIssuer();
+        const [jwks, quickStackHostname] = await Promise.all([
+            registryTokenSigningService.publicJwksJson(),
+            paramService.getString(ParamService.QS_SERVER_HOSTNAME),
+        ]);
+        if (!jwks || !quickStackHostname) {
+            return { config: '', jwks: undefined };
+        }
+        return {
+            jwks,
+            config: `auth:
+  token:
+    realm: https://${stripProtocol(quickStackHostname)}/api/v1/registry/token
+    service: ${REGISTRY_TOKEN_SERVICE}
+    issuer: ${issuer}
+    jwks: /etc/docker/registry/jwks.json
+    signingalgorithms:
+      - RS256`,
+        };
+    }
+
     private async createOrUpdateRegistryConfigMap(s3Target?: S3Target) {
 
         /* DO NOT REFORMAT THESE TWO STRINGS */
@@ -336,6 +495,8 @@ class RegistryService {
             storageProvider = storageFilesSystemprovider;
         }
 
+
+        const auth = await this.registryAuthConfig();
 
         // Source: https://distribution.github.io/distribution/about/configuration/
         console.log("Creating Registry ConfigMap...");
@@ -364,11 +525,12 @@ ${storageProvider}
       dryrun: false
     readonly:
       enabled: false
-http:
+${auth.config ? `${auth.config}\n` : ''}http:
   addr: :5000
   headers:
     X-Content-Type-Options: [nosniff]
-`
+`,
+                ...(auth.jwks ? { 'jwks.json': auth.jwks } : {}),
             },
         };
         const existingConfigMaps = await k3s.core.listNamespacedConfigMap(BUILD_NAMESPACE) as { body: V1ConfigMapList };

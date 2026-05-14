@@ -12,6 +12,11 @@ export class ParamService {
     static readonly LETS_ENCRYPT_MAIL = 'letsEncryptMail';
     static readonly USE_CANARY_CHANNEL = 'useCanaryChannel';
     static readonly REGISTRY_SOTRAGE_LOCATION = 'registryStorageLocation';
+    static readonly REGISTRY_HOSTNAME = 'registryHostname';
+    static readonly REGISTRY_TOKEN_ISSUER = 'registryTokenIssuer';
+    static readonly REGISTRY_DIRECT_AUTH_ENABLED = 'registryDirectAuthEnabled';
+    static readonly REGISTRY_TOKEN_PRIVATE_KEY = 'registryTokenPrivateKey';
+    static readonly REGISTRY_TOKEN_PUBLIC_JWK = 'registryTokenPublicJwk';
     static readonly PUBLIC_IPV4_ADDRESS = 'publicIpv4Address';
     static readonly QS_SYSTEM_BACKUP_LOCATION = Constants.QS_SYSTEM_BACKUP_LOCATION_PARAM_KEY;
     static readonly K3S_JOIN_TOKEN = Constants.K3S_JOIN_TOKEN;

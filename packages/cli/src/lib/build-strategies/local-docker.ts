@@ -1,7 +1,11 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { createBuild } from '../api-client';
+import { createBuild, ensureApiConfig } from '../api-client';
 import { configString, readQuickStackConfig } from '../state';
+import type { BuildCapabilities } from '../../../../../src/shared/model/agent-build-strategy.model';
 import { normalizeExistingImage } from './existing-image';
 
 const REGISTRY_CONFIG_KEYS = {
@@ -17,6 +21,8 @@ export type RegistryTunnelConfig = {
   remotePort: string;
   localUrl: string;
 };
+
+type RegistryAuth = NonNullable<NonNullable<BuildCapabilities['registry']>['auth']>;
 
 function imageRegistry(imageReference: string) {
   return normalizeExistingImage(imageReference).image.registry;
@@ -74,24 +80,69 @@ async function waitForTunnel(registry: string, child: ChildProcess, close: () =>
   throw new Error(`Could not open SSH tunnel to QuickStack registry ${registry}. Check registrySshHost/QUICKSTACK_REGISTRY_SSH_HOST and SSH access.`);
 }
 
-function runDocker(args: string[], failureMessage: string) {
-  const result = spawnSync('docker', args, { stdio: 'inherit' });
+function runDocker(args: string[], failureMessage: string, env?: Record<string, string | undefined>) {
+  const result = spawnSync('docker', args, { stdio: 'inherit', env: env ? { ...process.env, ...env } : process.env });
   if (result.status !== 0) throw new Error(failureMessage);
 }
 
-export async function runLocalDocker(appId: string, contextPath: string, imageReference: string, options: { dockerfile?: string; target?: string; platform?: string; buildArgs?: string[]; buildSecrets?: string[]; tunnel?: RegistryTunnelConfig | null } = {}) {
-  const closeTunnel = await openRegistryTunnel(imageReference, options.tunnel ?? await resolveRegistryTunnelConfig());
+async function readDockerConfig() {
+  const dockerConfigPath = path.join(process.env.DOCKER_CONFIG || path.join(os.homedir(), '.docker'), 'config.json');
   try {
-    const args = ['build', '-t', imageReference];
-    if (options.dockerfile) args.push('-f', path.isAbsolute(options.dockerfile) ? options.dockerfile : path.resolve(contextPath, options.dockerfile));
-    if (options.target) args.push('--target', options.target);
-    if (options.platform) args.push('--platform', options.platform);
-    for (const buildArg of options.buildArgs || []) args.push('--build-arg', buildArg);
-    for (const buildSecret of options.buildSecrets || []) args.push('--secret', buildSecret.includes('=') ? buildSecret : `id=${buildSecret}`);
-    args.push(contextPath);
-    runDocker(args, 'docker build failed.');
-    runDocker(['push', imageReference], 'docker push failed.');
-    return createBuild(appId, { kind: 'local-docker-finalize', imageReference, sourceProvenance: contextPath, buildSecrets: options.buildSecrets || [] });
+    return JSON.parse(await fsp.readFile(dockerConfigPath, 'utf8')) as Record<string, any>;
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return {};
+    throw error;
+  }
+}
+
+async function withDockerRegistryAuth<T>(imageReference: string, auth: RegistryAuth | undefined, callback: (env?: Record<string, string | undefined>) => Promise<T>) {
+  if (!auth || auth.type !== 'token') {
+    return await callback();
+  }
+  const { apiKey } = await ensureApiConfig();
+  const registry = imageRegistry(imageReference);
+  const dockerConfigDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'quickstack-docker-config-'));
+  const cleanupSync = () => { fs.rmSync(dockerConfigDir, { recursive: true, force: true }); };
+  const signalHandler = (signal: NodeJS.Signals) => {
+    cleanupSync();
+    process.off(signal, signalHandler);
+    process.kill(process.pid, signal);
+  };
+  process.once('SIGINT', signalHandler);
+  process.once('SIGTERM', signalHandler);
+  try {
+    const existingConfig = await readDockerConfig();
+    await fsp.writeFile(path.join(dockerConfigDir, 'config.json'), JSON.stringify({
+      ...existingConfig,
+      auths: {
+        ...(existingConfig.auths || {}),
+        [registry]: { auth: Buffer.from(`quickstack:${apiKey}`).toString('base64') },
+      },
+    }));
+    return await callback({ DOCKER_CONFIG: dockerConfigDir });
+  } finally {
+    process.off('SIGINT', signalHandler);
+    process.off('SIGTERM', signalHandler);
+    cleanupSync();
+  }
+}
+
+export async function runLocalDocker(appId: string, contextPath: string, imageReference: string, options: { dockerfile?: string; target?: string; platform?: string; buildArgs?: string[]; buildSecrets?: string[]; tunnel?: RegistryTunnelConfig | null; registryAuth?: RegistryAuth } = {}) {
+  const tunnel = options.registryAuth ? null : options.tunnel ?? await resolveRegistryTunnelConfig();
+  const closeTunnel = await openRegistryTunnel(imageReference, tunnel);
+  try {
+    return await withDockerRegistryAuth(imageReference, options.registryAuth, async (dockerEnv) => {
+      const args = ['build', '-t', imageReference];
+      if (options.dockerfile) args.push('-f', path.isAbsolute(options.dockerfile) ? options.dockerfile : path.resolve(contextPath, options.dockerfile));
+      if (options.target) args.push('--target', options.target);
+      if (options.platform) args.push('--platform', options.platform);
+      for (const buildArg of options.buildArgs || []) args.push('--build-arg', buildArg);
+      for (const buildSecret of options.buildSecrets || []) args.push('--secret', buildSecret.includes('=') ? buildSecret : `id=${buildSecret}`);
+      args.push(contextPath);
+      runDocker(args, 'docker build failed.', dockerEnv);
+      runDocker(['push', imageReference], 'docker push failed.', dockerEnv);
+      return createBuild(appId, { kind: 'local-docker-finalize', imageReference, sourceProvenance: contextPath, buildSecrets: options.buildSecrets || [] });
+    });
   } finally {
     closeTunnel?.();
   }

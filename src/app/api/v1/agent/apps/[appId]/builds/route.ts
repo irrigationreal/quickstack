@@ -3,6 +3,8 @@ import apiKeyService from "@/server/services/api-key.service";
 import auditService from "@/server/services/audit.service";
 import quickDeployBuildStrategyService from "@/server/services/quickdeploy-build-strategy.service";
 import quickDeployUploadService from "@/server/services/quickdeploy-upload.service";
+import registryService from "@/server/services/registry.service";
+import registryApiAdapter from "@/server/adapter/registry-api.adapter";
 import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
 import { BuildCreateRequestZodModel } from "@/shared/model/agent-build-strategy.model";
 import { ServiceException } from "@/shared/model/service.exception.model";
@@ -16,6 +18,24 @@ function unauthorized() {
 
 function forbidden(message = 'API key is not authorized to build this app.') {
     return NextResponse.json({ status: 'error', message }, { status: 403 });
+}
+
+async function verifiedManagedLocalDockerBuildResult(app: { id: string; projectId: string }, imageReference: string, sourceProvenance: string) {
+    const metadata = await registryService.getRegistryMetadataForApp(app);
+    if (metadata.pushCredentials !== true || !metadata.repository) {
+        throw new ServiceException(metadata.unavailableReason || 'Managed registry push credentials are not available for this app.');
+    }
+    const parsed = quickDeployUploadService.normalizeBuildResult({ imageReference, strategy: 'local-docker', sourceProvenance, cacheHit: false }).image;
+    if (parsed.registry !== metadata.url || parsed.repository !== metadata.repository || !parsed.tag || parsed.digest) {
+        throw new ServiceException('Finalized image must match the server-approved registry repository and tag for this app.');
+    }
+    const [digest] = await registryApiAdapter.getManifestWithDigest(parsed.repository, parsed.tag);
+    return quickDeployUploadService.normalizeBuildResult({
+        imageReference: `${metadata.internalUrl}/${parsed.repository}@${digest}`,
+        strategy: 'local-docker',
+        sourceProvenance,
+        cacheHit: false,
+    });
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }) {
@@ -53,7 +73,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
         return NextResponse.json(buildResult ? { status: 'hit', buildResult } : { status: 'miss' });
     }
 
-    return NextResponse.json(quickDeployBuildStrategyService.getCapabilities());
+    return NextResponse.json({
+        ...quickDeployBuildStrategyService.getCapabilities(),
+        registry: await registryService.getRegistryMetadataForApp(app),
+    });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ appId: string }> }) {
@@ -91,12 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         if (parsed.data.kind === 'remote-builder') {
             throw new ServiceException('remote builder is not configured on this server.');
         }
-        const buildResult = quickDeployUploadService.normalizeBuildResult({
-            imageReference: parsed.data.imageReference,
-            strategy: 'local-docker',
-            sourceProvenance: parsed.data.sourceProvenance,
-            cacheHit: false,
-        });
+        const buildResult = await verifiedManagedLocalDockerBuildResult(app, parsed.data.imageReference, parsed.data.sourceProvenance);
         quickDeployBuildStrategyService.recordBuildResult(app.id, buildResult);
         await auditService.recordBestEffort({
             ...authenticated.auditActor,
