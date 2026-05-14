@@ -21,40 +21,24 @@ export async function GET(request: Request) {
         return NextResponse.json({ status: 'error', message: 'API key does not have app read permission.' }, { status: 403 });
     }
 
+    const projectId = new URL(request.url).searchParams.get('projectId');
     const projects = await projectService.getAllProjects();
     const visibleProjects = apiKeyService.filterAllowedProjects(
         authenticated.apiKey,
         projects.filter(project => UserGroupUtils.sessionHasReadAccessToProject(authenticated.session, project.id)),
     );
-    const visibleProjectsWithReadableApps = visibleProjects
-        .map(project => ({
-            ...project,
-            apps: project.apps.filter(app => UserGroupUtils.sessionHasReadAccessForApp(authenticated.session, app.id)),
-        }))
-        .filter(project => project.apps.length > 0);
 
-    return NextResponse.json({
-        status: 'success',
-        actor: {
-            id: authenticated.session.id,
-            kind: 'agent',
-            displayName: authenticated.apiKey.name || authenticated.session.email,
-            email: authenticated.session.email,
-        },
-        user: {
-            email: authenticated.session.email,
-        },
-        projects: visibleProjectsWithReadableApps.map(project => ({
-            id: project.id,
-            name: project.name,
-            ownerActorId: null,
-            apps: project.apps.map(app => ({
+    const apps = visibleProjects
+        .filter(project => !projectId || project.id === projectId)
+        .flatMap(project => project.apps
+            .filter(app => UserGroupUtils.sessionHasReadAccessForApp(authenticated.session, app.id))
+            .map(app => ({
                 id: app.id,
-                name: app.name,
                 projectId: app.projectId,
-                appType: app.appType,
-                sourceType: app.sourceType,
-            })),
-        })),
-    });
+                name: app.name,
+                status: app.replicas === 0 ? 'stopped' : 'running',
+                lastDeployedAt: app.updatedAt instanceof Date ? app.updatedAt.toISOString() : undefined,
+            })));
+
+    return NextResponse.json({ apps });
 }

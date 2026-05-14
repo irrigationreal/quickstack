@@ -2,8 +2,14 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+export interface DiscoveryCache {
+  lastActor?: { id: string; displayName?: string; email?: string };
+  lastProjectId?: string;
+  lastAppId?: string;
+}
+
 export interface LocalState {
-  index: any;
+  index: (DiscoveryCache & Record<string, any>) | null;
   apps: any[];
 }
 

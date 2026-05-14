@@ -164,11 +164,24 @@ class ApiKeyService {
         return parseScopes(apiKey.scopes).includes(scope);
     }
 
+    isAllowedForProject(apiKey: ApiKey, projectId: string) {
+        const projectIds = parseJsonList(apiKey.projectIdsJson);
+        return projectIds.length === 0 || projectIds.includes(projectId);
+    }
+
     isAllowedForApp(apiKey: ApiKey, app: { id: string; projectId: string }) {
         const appIds = parseJsonList(apiKey.appIdsJson);
-        const projectIds = parseJsonList(apiKey.projectIdsJson);
         return (appIds.length === 0 || appIds.includes(app.id))
-            && (projectIds.length === 0 || projectIds.includes(app.projectId));
+            && this.isAllowedForProject(apiKey, app.projectId);
+    }
+
+    filterAllowedProjects<T extends { id: string; apps?: { id: string; projectId: string }[] }>(apiKey: ApiKey, projects: T[]) {
+        return projects
+            .filter(project => this.isAllowedForProject(apiKey, project.id))
+            .map(project => ({
+                ...project,
+                apps: project.apps?.filter(app => this.isAllowedForApp(apiKey, app)) ?? [],
+            }));
     }
 }
 

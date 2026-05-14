@@ -3,6 +3,8 @@ import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import { CLI_VERSION } from './version';
 import { configString, readQuickStackConfig } from './state';
+import type { AgentMeResponse } from '../../../../src/shared/model/agent-me.model';
+import type { AgentAppListResponse } from '../../../../src/shared/model/agent-app-list.model';
 
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
 export const CHUNK_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
@@ -46,6 +48,15 @@ export async function request<T = any>(path: string, options: RequestInit & { du
     throw new QuickStackApiError(response.status, message, body);
   }
   return body as T;
+}
+
+export function getMe() {
+  return request<AgentMeResponse>('/api/v1/agent/me');
+}
+
+export function listApps({ projectId }: { projectId?: string } = {}) {
+  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return request<AgentAppListResponse>(`/api/v1/agent/apps${query}`);
 }
 
 export async function uploadBuild(appId: string, tarPath: string, metadata: Record<string, unknown>) {
