@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentLaunchPlanZodModel } from "./agent-launch-plan.model";
 
 export const quickDeployModeZodModel = z.enum(['static', 'dockerfile', 'image']).default('image');
 
@@ -13,6 +14,7 @@ export const quickDeployEnsureAppZodModel = z.object({
     domainPrefix: z.string().trim().min(1).max(40).optional(),
     customHostname: z.string().trim().toLowerCase().regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/, 'customHostname must be a valid hostname.').optional(),
     mode: quickDeployModeZodModel,
+    plan: AgentLaunchPlanZodModel.optional(),
 });
 
 export type QuickDeployEnsureAppModel = z.infer<typeof quickDeployEnsureAppZodModel>;

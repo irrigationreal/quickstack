@@ -66,12 +66,14 @@ export async function POST(request: Request) {
         }
     }
 
+    const plannedPort = input.plan?.ports[0] ?? input.port;
+    const plannedDockerfileEvidence = input.plan?.evidence.find(item => item.kind === 'dockerfile')?.sourcePath;
     const isManagedSource = input.mode !== 'image';
     const buildMethod = input.mode === 'image' ? existingApp?.buildMethod ?? 'RAILPACK' : 'DOCKERFILE';
     const dockerfilePath = input.mode === 'static'
         ? './.quickstack/generated-static.Dockerfile'
         : input.mode === 'dockerfile'
-            ? './Dockerfile'
+            ? plannedDockerfileEvidence ?? './Dockerfile'
             : existingApp?.dockerfilePath ?? './Dockerfile';
     const savedApp = await appService.save({
         ...(existingApp ? { id: existingApp.id } : {}),
@@ -91,11 +93,11 @@ export async function POST(request: Request) {
     }, !existingApp);
 
     const extendedApp = await appService.getExtendedById(savedApp.id);
-    const existingPort = extendedApp.appPorts.find(port => port.port === input.port);
+    const existingPort = extendedApp.appPorts.find(port => port.port === plannedPort);
     if (!existingPort) {
         await appService.savePort({
             appId: savedApp.id,
-            port: input.port,
+            port: plannedPort,
         });
     }
 
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
         id: existingDomain?.id,
         appId: savedApp.id,
         hostname,
-        port: input.port,
+        port: plannedPort,
         useSsl: true,
         redirectHttps: !input.customHostname,
     });
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
         appName: savedApp.name,
         metadata: {
             mode: input.mode,
-            port: input.port,
+            port: plannedPort,
             domainPrefix: input.domainPrefix,
             customHostname: input.customHostname,
             hasRegistryCredentials: Boolean(input.registryUsername || input.registryPassword),
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
         projectId: savedApp.projectId,
         name: savedApp.name,
         image: input.image,
-        port: input.port,
+        port: plannedPort,
         hostname,
         url: `https://${hostname}`,
     });

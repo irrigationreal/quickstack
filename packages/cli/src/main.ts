@@ -9,6 +9,7 @@ import { detect } from './commands/detect';
 import { packageCommand } from './commands/package';
 import { launch } from './commands/launch';
 import { deploy } from './commands/deploy';
+import { plan } from './commands/plan';
 import { secrets } from './commands/secrets';
 import { config } from './commands/config';
 import { postgres } from './commands/postgres';
@@ -29,8 +30,9 @@ Usage:
   quickstack setup --url <quickstack-url> --api-key <qstk_key>
   quickstack whoami [--json]
   quickstack apps list [--json]
-  quickstack launch [path] [--image <image>] [--project <id>] [--name <name>] [--json]
-  quickstack deploy [path] [--app <id>] [--json]
+  quickstack plan [path] [--json]
+  quickstack launch [path] [--plan|--dry-run] [--image <image>] [--project <id>] [--name <name>] [--json]
+  quickstack deploy [path] [--plan|--dry-run] [--app <id>] [--json]
   quickstack detect [path]
   quickstack package <path> --out <context.tar>
   quickstack secrets import <.env> --app <appId> [--dry-run] [--json]
@@ -61,6 +63,7 @@ async function main() {
   if (ctx.command === 'whoami' || ctx.command === 'me') return whoami(ctx);
   if (ctx.command === 'apps') return apps(ctx);
   if (ctx.command === 'detect') return detect(ctx);
+  if (ctx.command === 'plan') return plan(ctx);
   if (ctx.command === 'package') return packageCommand(ctx);
   if (ctx.command === 'launch') return launch(ctx);
   if (ctx.command === 'deploy') return deploy(ctx);

@@ -6,6 +6,13 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'co
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 const K8S_DIRS = new Set(['k8s', 'kubernetes', 'deploy', '.k8s']);
 
+export type DetectionEvidence = {
+  kind: string;
+  sourcePath: string;
+  reason: string;
+  value?: unknown;
+};
+
 async function readJson(file: string) {
   try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return null; }
 }
@@ -72,7 +79,13 @@ async function detectPackageRoot(root: string, rel: string, files: string[]) {
   const startCommand = scripts.start ? `${packageManager(files) || 'npm'} run start` : undefined;
   const outputs = ['dist', 'build', 'out', '.next'].filter(name => files.some(file => file.startsWith(`${prefix}${name}/`) || file === `${prefix}${name}`));
   const mode = dockerfile ? 'dockerfile' : (framework && ['vite', 'react', 'vue', 'sveltekit'].includes(framework) ? 'static-candidate' : (framework || startCommand ? 'app-candidate' : 'metadata-only'));
-  return { root: rel, name: pkg.name || path.basename(dir), framework, mode, dockerfile, buildCommand, startCommand, outputs, candidatePort: candidatePort(pkg, dockerfileText) };
+  const detectedPort = candidatePort(pkg, dockerfileText);
+  const evidence: DetectionEvidence[] = [{ kind: 'service-root', sourcePath: path.join(rel, 'package.json'), reason: 'package.json marks a possible deployable service root', value: rel }];
+  if (framework) evidence.push({ kind: 'framework', sourcePath: path.join(rel, 'package.json'), reason: `${framework} dependency or config detected`, value: framework });
+  if (dockerfile) evidence.push({ kind: 'dockerfile', sourcePath: path.join(rel, dockerfile), reason: 'Dockerfile exists in service root', value: dockerfile });
+  if (detectedPort) evidence.push({ kind: 'port', sourcePath: dockerfile ? path.join(rel, dockerfile) : path.join(rel, 'package.json'), reason: 'port inferred from Dockerfile or package scripts', value: detectedPort });
+  for (const output of outputs) evidence.push({ kind: 'output-dir', sourcePath: path.join(rel, output), reason: 'known build output directory exists', value: output });
+  return { root: rel, name: pkg.name || path.basename(dir), framework, mode, dockerfile, buildCommand, startCommand, outputs, candidatePort: detectedPort, evidence };
 }
 
 export async function detectProject(root: string) {
@@ -89,11 +102,15 @@ export async function detectProject(root: string) {
     return K8S_DIRS.has(dir) && /\.ya?ml$/i.test(file);
   });
   const workspace = { pnpmWorkspace: files.includes('pnpm-workspace.yaml'), packageWorkspaces: Boolean((await readJson(path.join(root, 'package.json')))?.workspaces), turbo: files.includes('turbo.json'), nx: files.includes('nx.json') };
+  const evidence: DetectionEvidence[] = packageRoots.flatMap(service => service.evidence || []);
+  for (const file of composeFiles) evidence.push({ kind: 'compose-file', sourcePath: file, reason: 'Docker Compose manifest detected', value: file });
+  for (const file of kubernetesFiles) evidence.push({ kind: 'kubernetes-manifest', sourcePath: file, reason: 'Kubernetes manifest detected', value: file });
+  if (workspace.pnpmWorkspace) evidence.push({ kind: 'workspace', sourcePath: 'pnpm-workspace.yaml', reason: 'pnpm workspace detected', value: 'pnpm' });
   const deployableServices = packageRoots.filter(service => service.mode === 'dockerfile' || service.mode === 'static-candidate' || service.mode === 'app-candidate');
   const ambiguity = [];
   if (deployableServices.length > 1) ambiguity.push('multiple-deployable-services');
   if (composeFiles.length > 0 && deployableServices.length > 0) ambiguity.push('compose-and-source-services');
   if (kubernetesFiles.length > 0 && (composeFiles.length > 0 || deployableServices.length > 0)) ambiguity.push('kubernetes-and-other-inputs');
   const recommendation = composeFiles.length > 0 ? 'compose-import' : kubernetesFiles.length > 0 ? 'kubernetes-import' : deployableServices.length === 1 ? deployableServices[0].mode : 'ask';
-  return { root, packageManager: packageManager(files), workspace, composeFiles, kubernetesFiles, rawPublicEndpointCandidates: [], services: packageRoots, deployableServices, ambiguity, recommendation, shouldAsk: ambiguity.length > 0 || recommendation === 'ask' };
+  return { root, packageManager: packageManager(files), workspace, composeFiles, kubernetesFiles, rawPublicEndpointCandidates: [], services: packageRoots, deployableServices, evidence, ambiguity, recommendation, shouldAsk: ambiguity.length > 0 || recommendation === 'ask' };
 }

@@ -5,6 +5,7 @@ import { CLI_VERSION } from './version';
 import { configString, readQuickStackConfig } from './state';
 import type { AgentMeResponse } from '../../../../src/shared/model/agent-me.model';
 import type { AgentAppListResponse } from '../../../../src/shared/model/agent-app-list.model';
+import type { AgentLaunchPlan, AgentLaunchPlanRequest } from '../../../../src/shared/model/agent-launch-plan.model';
 
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
 export const CHUNK_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
@@ -57,6 +58,10 @@ export function getMe() {
 export function listApps({ projectId }: { projectId?: string } = {}) {
   const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
   return request<AgentAppListResponse>(`/api/v1/agent/apps${query}`);
+}
+
+export function postLaunchPlan(payload: AgentLaunchPlanRequest) {
+  return request<AgentLaunchPlan>('/api/v1/agent/launch-plan', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 export async function uploadBuild(appId: string, tarPath: string, metadata: Record<string, unknown>) {
