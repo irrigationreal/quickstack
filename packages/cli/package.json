@@ -1,0 +1,14 @@
+{
+  "name": "@quickstack/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "quickstack": "./dist/quickstack"
+  },
+  "scripts": {
+    "build": "bun build src/main.ts --compile --target=bun-darwin-arm64 --define __QUICKSTACK_CLI_VERSION__='\"0.1.0\"' --outfile dist/quickstack",
+    "typecheck": "tsc --project tsconfig.json --noEmit --pretty false"
+  },
+  "devDependencies": {}
+}
