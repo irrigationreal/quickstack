@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import { useEffect, useState } from "react";
-import { getRessourceDataApp } from "./actions";
+import { getResourceDataApp } from "./actions";
 import FullLoadingSpinner from "@/components/ui/full-loading-spinnter";
 import { PodsResourceInfoModel } from "@/shared/model/pods-resource-info.model";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,7 +20,7 @@ export default function MonitoringTab({
     const updateValues = async () => {
         setError(undefined);
         try {
-            const response = await getRessourceDataApp(app.projectId, app.id);
+            const response = await getResourceDataApp(app.projectId, app.id);
             if (response.status === 'success' && response.data) {
                 setSelectedPod(response.data);
 

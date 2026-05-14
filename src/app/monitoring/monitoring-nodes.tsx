@@ -22,7 +22,7 @@ import {
   useBreadcrumbs,
 } from '@/frontend/states/zustand.states';
 import { useEffect, useState, useMemo } from 'react';
-import ChartDiskRessources from './disk-chart';
+import ChartDiskResources from './disk-chart';
 import { Actions } from '@/frontend/utils/nextjs-actions.utils';
 import { getNodeResourceUsage } from './actions';
 import { toast } from 'sonner';
@@ -45,7 +45,7 @@ export default function ResourcesNodes({
   const getDiskUsageCapacity = (node: NodeResourceModel) => node.diskUsageCapacity ?? 0;
   const toPercent = (used: number, capacity: number) => (capacity > 0 ? (used / capacity) * 100 : 0);
 
-  const [updatedNodeRessources, setUpdatedResourcesNodes] = useState<NodeResourceModel[] | undefined>(resourcesNodes);
+  const [updatedNodeResources, setUpdatedResourcesNodes] = useState<NodeResourceModel[] | undefined>(resourcesNodes);
 
   const fetchResourcesNodes = async () => {
     try {
@@ -70,13 +70,13 @@ export default function ResourcesNodes({
     ), []);
 
   const clusterStats = useMemo(() => {
-    if (!updatedNodeRessources) return {
+    if (!updatedNodeResources) return {
       cpuUsage: 0, cpuCapacity: 1,
       ramUsage: 0, ramCapacity: 1,
       diskUsageAbsolut: 0, diskUsageReserved: 0, diskCapacity: 1
     };
 
-    return updatedNodeRessources.reduce((acc, node) => ({
+    return updatedNodeResources.reduce((acc, node) => ({
       cpuUsage: acc.cpuUsage + node.cpuUsage,
       cpuCapacity: acc.cpuCapacity + node.cpuCapacity,
       ramUsage: acc.ramUsage + node.ramUsage,
@@ -89,7 +89,7 @@ export default function ResourcesNodes({
       ramUsage: 0, ramCapacity: 0,
       diskUsageAbsolut: 0, diskUsageReserved: 0, diskCapacity: 0
     });
-  }, [updatedNodeRessources]);
+  }, [updatedNodeResources]);
 
   const getUsageColor = (percentage: number) => {
     if (percentage >= 90) return "hsl(var(--chart-1))";
@@ -139,7 +139,7 @@ export default function ResourcesNodes({
     ];
   };
 
-  if (!updatedNodeRessources) {
+  if (!updatedNodeResources) {
     return <FullLoadingSpinner />
   }
 
@@ -265,7 +265,7 @@ export default function ResourcesNodes({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {updatedNodeRessources.map((node) => (
+              {updatedNodeResources.map((node) => (
                 <TableRow key={node.name}>
                   <TableCell className="font-medium">{node.name}</TableCell>
                   <TableCell className="w-[25%]">
@@ -515,7 +515,7 @@ function NodeDetailsSheet({ node }: { node: NodeResourceModel }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ChartDiskRessources nodeRessource={node} />
+              <ChartDiskResources nodeResource={node} />
             </CardContent>
           </Card>
         </div>

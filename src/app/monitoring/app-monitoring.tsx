@@ -21,14 +21,14 @@ import { AppMonitoringUsageModel } from '@/shared/model/app-monitoring-usage.mod
 import PodStatusIndicator from '@/components/custom/pod-status-indicator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-export default function AppRessourceMonitoring({
-    appsRessourceUsage
+export default function AppResourceMonitoring({
+    appsResourceUsage
 }: {
-    appsRessourceUsage?: AppMonitoringUsageModel[]
+    appsResourceUsage?: AppMonitoringUsageModel[]
 }) {
 
 
-    const [updatedAppUsage, setUpdatedAppUsage] = useState<AppMonitoringUsageModel[] | undefined>(appsRessourceUsage);
+    const [updatedAppUsage, setUpdatedAppUsage] = useState<AppMonitoringUsageModel[] | undefined>(appsResourceUsage);
 
     const fetchMonitoringData = async () => {
         try {
@@ -45,12 +45,12 @@ export default function AppRessourceMonitoring({
         return () => {
             clearInterval(intervalId);
         }
-    }, [appsRessourceUsage]);
+    }, [appsResourceUsage]);
 
     if (!updatedAppUsage) {
         return <Card>
             <CardHeader>
-                <CardTitle>App Ressource Usage</CardTitle>
+                <CardTitle>App Resource Usage</CardTitle>
             </CardHeader>
             <CardContent>
                 <FullLoadingSpinner />
@@ -61,7 +61,7 @@ export default function AppRessourceMonitoring({
     return (
         <Card>
             <CardHeader>
-                <CardTitle>App Ressource Usage</CardTitle>
+                <CardTitle>App Resource Usage</CardTitle>
             </CardHeader>
             <CardContent>
                 <Table>

@@ -348,7 +348,7 @@ class DeploymentService {
             dlog(deploymentId, `Creating deployment...`);
             await k3s.apps.createNamespacedDeployment(app.projectId, body);
         }
-        dlog(deploymentId, `Cleanup unused ressources from previous deployments...`);
+        dlog(deploymentId, `Cleanup unused resources from previous deployments...`);
         await configMapService.deleteUnusedConfigMaps(app);
         await pvcService.deleteUnusedPvcOfApp(app);
         await svcService.createOrUpdateServiceForApp(deploymentId, app);

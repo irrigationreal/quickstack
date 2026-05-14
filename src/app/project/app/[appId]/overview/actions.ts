@@ -31,7 +31,7 @@ export const getPodsForApp = async (appId: string) =>
         return await podService.getPodsForApp(app.projectId, appId);
     });
 
-export const getRessourceDataApp = async (projectId: string, appId: string) =>
+export const getResourceDataApp = async (projectId: string, appId: string) =>
     simpleAction(async () => {
         await isAuthorizedReadForApp(appId);
         return await monitoringService.getMonitoringForApp(projectId, appId);

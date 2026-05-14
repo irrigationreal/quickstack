@@ -11,16 +11,16 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '
 import { NodeResourceModel } from '@/shared/model/node-resource.model';
 import { KubeSizeConverter } from '@/shared/utils/kubernetes-size-converter.utils';
 
-export default function ChartDiskRessources({
-    nodeRessource,
+export default function ChartDiskResources({
+    nodeResource,
 }: {
-    nodeRessource: NodeResourceModel;
+    nodeResource: NodeResourceModel;
 }) {
 
-    const diskUsed = nodeRessource.diskUsageAbsolut ?? 0;
-    const diskReserved = nodeRessource.diskUsageReserved ?? 0;
-    const diskCapacity = nodeRessource.diskUsageCapacity ?? 0;
-    const diskSchedulable = nodeRessource.diskSpaceSchedulable ?? Math.max(0, diskCapacity - diskUsed - diskReserved);
+    const diskUsed = nodeResource.diskUsageAbsolut ?? 0;
+    const diskReserved = nodeResource.diskUsageReserved ?? 0;
+    const diskCapacity = nodeResource.diskUsageCapacity ?? 0;
+    const diskSchedulable = nodeResource.diskSpaceSchedulable ?? Math.max(0, diskCapacity - diskUsed - diskReserved);
     const diskUsedAndReserved = diskUsed + diskReserved;
     const diskUsagePercent = diskCapacity > 0 ? (diskUsedAndReserved / diskCapacity) * 100 : 0;
 
@@ -195,7 +195,7 @@ export default function ChartDiskRessources({
                                                 y={viewBox.cy}
                                                 className="fill-foreground text-4xl font-bold"
                                             >
-                                                {(nodeRessource.diskUsageAbsolut / nodeRessource.diskUsageCapacity * 100).toFixed(1)}
+                                                {(nodeResource.diskUsageAbsolut / nodeResource.diskUsageCapacity * 100).toFixed(1)}
                                             </tspan>
                                             <tspan
                                                 x={viewBox.cx}

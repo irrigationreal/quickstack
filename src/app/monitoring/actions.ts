@@ -26,7 +26,7 @@ export const getVolumeMonitoringUsage = async () =>
 export const getMonitoringForAllApps = async () =>
     simpleAction(async () => {
         const session = await getAuthUserSession();
-        let updatedNodeRessources = await monitoringService.getMonitoringForAllApps();
-        updatedNodeRessources = updatedNodeRessources?.filter((app) => UserGroupUtils.sessionHasReadAccessForApp(session, app.appId));
-        return updatedNodeRessources;
+        let updatedNodeResources = await monitoringService.getMonitoringForAllApps();
+        updatedNodeResources = updatedNodeResources?.filter((app) => UserGroupUtils.sessionHasReadAccessForApp(session, app.appId));
+        return updatedNodeResources;
     }) as Promise<ServerActionResult<unknown, AppMonitoringUsageModel[]>>;

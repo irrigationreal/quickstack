@@ -74,20 +74,25 @@ class MonitorService {
     async getMonitoringForAllApps() {
         const [topPods, totalResourcesNodes, projects] = await Promise.all([
             k8s.topPods(k3s.core, new k8s.Metrics(k3s.getKubeConfig())),
-            this.getTotalAvailableNodeRessources(),
+            this.getTotalAvailableNodeResources(),
             projectService.getAllProjects()
         ]);
 
         const appStats: AppMonitoringUsageModel[] = [];
+        const topPodsByApp = new Map<string, k8s.PodStatus[]>();
+        for (const topPod of topPods) {
+            const namespace = topPod.Pod.metadata?.namespace;
+            const appId = topPod.Pod.metadata?.labels?.app;
+            if (!namespace || !appId) continue;
+            const key = `${namespace}/${appId}`;
+            topPodsByApp.set(key, [...(topPodsByApp.get(key) ?? []), topPod]);
+        }
 
-        for (let project of projects) {
-            for (let app of project.apps) {
-                const podsFromApp = await standalonePodService.getPodsForApp(project.id, app.id);
-                const filteredTopPods = topPods.filter((topPod) =>
-                    podsFromApp.some((pod) => pod.podName === topPod.Pod.metadata?.name)
-                );
-                const totalResourcesApp = this.calulateTotalRessourceUsageOfApp(filteredTopPods);
-                const cpuUsagePercent = (totalResourcesApp.cpu / totalResourcesNodes.cpu) * 100;
+        for (const project of projects) {
+            for (const app of project.apps) {
+                const filteredTopPods = topPodsByApp.get(`${project.id}/${app.id}`) ?? [];
+                const totalResourcesApp = this.calculateTotalResourceUsageOfApp(filteredTopPods);
+                const cpuUsagePercent = totalResourcesNodes.cpu > 0 ? (totalResourcesApp.cpu / totalResourcesNodes.cpu) * 100 : 0;
                 appStats.push({
                     projectId: project.id,
                     projectName: project.name,
@@ -117,14 +122,14 @@ class MonitorService {
             podsFromApp.some((pod) => pod.podName === topPod.Pod.metadata?.name)
         );
 
-        const totalResourcesNodes = await this.getTotalAvailableNodeRessources();
-        const totalResourcesApp = this.calulateTotalRessourceUsageOfApp(filteredTopPods);
+        const totalResourcesNodes = await this.getTotalAvailableNodeResources();
+        const totalResourcesApp = this.calculateTotalResourceUsageOfApp(filteredTopPods);
 
-        var totalRamNodesCorrectUnit: number = totalResourcesNodes.ramBytes;
-        var totalRamAppCorrectUnit: number = totalResourcesApp.ramBytes;
+        const totalRamNodesCorrectUnit: number = totalResourcesNodes.ramBytes;
+        const totalRamAppCorrectUnit: number = totalResourcesApp.ramBytes;
 
-        const appCpuUsagePercent = ((totalResourcesApp.cpu / totalResourcesNodes.cpu) * 100);
-        const appRamUsagePercent = ((totalRamAppCorrectUnit / totalRamNodesCorrectUnit) * 100);
+        const appCpuUsagePercent = totalResourcesNodes.cpu > 0 ? ((totalResourcesApp.cpu / totalResourcesNodes.cpu) * 100) : 0;
+        const appRamUsagePercent = totalRamNodesCorrectUnit > 0 ? ((totalRamAppCorrectUnit / totalRamNodesCorrectUnit) * 100) : 0;
 
         return {
             cpuPercent: appCpuUsagePercent,
@@ -134,7 +139,7 @@ class MonitorService {
         }
     }
 
-    private calulateTotalRessourceUsageOfApp(filteredTopPods: k8s.PodStatus[]) {
+    private calculateTotalResourceUsageOfApp(filteredTopPods: k8s.PodStatus[]) {
         return filteredTopPods.reduce(
             (acc, pod) => {
                 acc.cpu += Number(pod.CPU.CurrentUsage) || 0;
@@ -145,7 +150,7 @@ class MonitorService {
         );
     }
 
-    private async getTotalAvailableNodeRessources() {
+    private async getTotalAvailableNodeResources() {
         const topNodes = await clusterService.getNodeInfo();
         const totalResourcesNodes = topNodes.reduce(
             (acc, node) => {

@@ -7,7 +7,7 @@ import ResourceNodes from "./monitoring-nodes";
 import { NodeResourceModel } from "@/shared/model/node-resource.model";
 import { AppVolumeMonitoringUsageModel } from "@/shared/model/app-volume-monitoring-usage.model";
 import monitoringService from "@/server/services/monitoring.service";
-import AppRessourceMonitoring from "./app-monitoring";
+import AppResourceMonitoring from "./app-monitoring";
 import AppVolumeMonitoring from "./app-volumes-monitoring";
 import { AppMonitoringUsageModel } from "@/shared/model/app-monitoring-usage.model";
 import { UserGroupUtils } from "@/shared/utils/role.utils";
@@ -17,7 +17,7 @@ export default async function ResourceNodesInfoPage() {
 
     const session = await getAuthUserSession();
 
-    let [resourcesNode, volumesUsage, updatedNodeRessources] = await Promise.all([
+    let [resourcesNode, volumesUsage, updatedNodeResources] = await Promise.all([
         CatchUtils.resultOrUndefined(() => clusterService.getNodeResourceUsage()),
         CatchUtils.resultOrUndefined(() => monitoringService.getAllAppVolumesUsage()),
         CatchUtils.resultOrUndefined(() => monitoringService.getMonitoringForAllApps())
@@ -27,7 +27,7 @@ export default async function ResourceNodesInfoPage() {
     volumesUsage = volumesUsage?.filter((volume) => UserGroupUtils.sessionHasReadAccessForApp(session, volume.appId));
     // only base volumes, no shared volumes
     volumesUsage = volumesUsage?.filter((volume) => !!volume.isBaseVolume);
-    updatedNodeRessources = updatedNodeRessources?.filter((app) => UserGroupUtils.sessionHasReadAccessForApp(session, app.appId));
+    updatedNodeResources = updatedNodeResources?.filter((app) => UserGroupUtils.sessionHasReadAccessForApp(session, app.appId));
 
     return (
         <div className="flex-1 space-y-4 pt-6">
@@ -37,7 +37,7 @@ export default async function ResourceNodesInfoPage() {
             </PageTitle>
             <div className="space-y-6">
                 <ResourceNodes resourcesNodes={resourcesNode} />
-                <AppRessourceMonitoring appsRessourceUsage={updatedNodeRessources} />
+                <AppResourceMonitoring appsResourceUsage={updatedNodeResources} />
                 <AppVolumeMonitoring volumesUsage={volumesUsage} />
             </div>
         </div>

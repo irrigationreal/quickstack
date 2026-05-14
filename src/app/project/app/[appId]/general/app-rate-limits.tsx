@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import { cn } from "@/frontend/utils/utils";
-import { getRessourceDataApp } from "../overview/actions";
+import { getResourceDataApp } from "../overview/actions";
 import { PodsResourceInfoModel } from "@/shared/model/pods-resource-info.model";
 import { KubeSizeConverter } from "@/shared/utils/kubernetes-size-converter.utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,7 +34,7 @@ export default function GeneralAppRateLimits({ app, readonly }: {
     const [monitoringData, setMonitoringData] = useState<PodsResourceInfoModel | undefined>(undefined);
 
     useEffect(() => {
-        getRessourceDataApp(app.projectId, app.id).then((res) => {
+        getResourceDataApp(app.projectId, app.id).then((res) => {
             if (res.status === 'success' && res.data) {
                 setMonitoringData(res.data);
             }
