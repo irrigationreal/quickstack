@@ -27,6 +27,7 @@ import { deploy } from '../../packages/cli/src/commands/deploy';
 import { destroy } from '../../packages/cli/src/commands/destroy';
 import { exec } from '../../packages/cli/src/commands/exec';
 import { launch } from '../../packages/cli/src/commands/launch';
+import { setup } from '../../packages/cli/src/commands/setup';
 import { tokens } from '../../packages/cli/src/commands/tokens';
 
 const ctx = (command: string, commandArgs: string[], json = true) => ({ command, commandArgs, globalArgs: [], json, nonInteractive: true });
@@ -56,6 +57,38 @@ describe('quickstack lifecycle CLI contracts', () => {
     process.chdir(originalCwd);
   });
 
+  it('stores registry tunnel settings during setup so deploy can push images automatically', async () => {
+    const root = await tempProject();
+    const configPath = path.join(root, 'config.json');
+    const previousConfig = process.env.QUICKSTACK_CONFIG;
+    process.env.QUICKSTACK_CONFIG = configPath;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      await setup(ctx('setup', [
+        '--url', 'https://quickstack.example/',
+        '--api-key', 'qstk_test_secret',
+        '--registry-ssh-host', 'quickstack@example.com',
+        '--registry-ssh-remote-host', 'registry-svc.registry-and-build.svc.cluster.local',
+        '--registry-ssh-remote-port', '5000',
+        '--registry-local-url', 'localhost:30100',
+      ]));
+
+      const saved = JSON.parse(await fs.readFile(configPath, 'utf8'));
+      expect(saved).toEqual(expect.objectContaining({
+        url: 'https://quickstack.example',
+        registrySshHost: 'quickstack@example.com',
+        registrySshRemoteHost: 'registry-svc.registry-and-build.svc.cluster.local',
+        registrySshRemotePort: '5000',
+        registryLocalUrl: 'localhost:30100',
+      }));
+    } finally {
+      if (previousConfig === undefined) delete process.env.QUICKSTACK_CONFIG;
+      else process.env.QUICKSTACK_CONFIG = previousConfig;
+      log.mockRestore();
+    }
+  });
+
   it('launches with the only visible project when --project is omitted', async () => {
     const root = await tempProject();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -66,7 +99,7 @@ describe('quickstack lifecycle CLI contracts', () => {
       method: 'POST',
       body: expect.stringContaining('"projectId":"proj-1"'),
     }));
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'auto');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });
@@ -79,7 +112,7 @@ describe('quickstack lifecycle CLI contracts', () => {
     await deploy(ctx('deploy', [root]));
 
     expect(appMocks.resolveApp).not.toHaveBeenCalled();
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     expect(apiMocks.request).not.toHaveBeenCalledWith('/api/v1/agent/apps/app-1/deploy', { method: 'POST' });
     log.mockRestore();
@@ -93,7 +126,7 @@ describe('quickstack lifecycle CLI contracts', () => {
 
     await deploy(ctx('deploy', [root]));
 
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });
@@ -107,7 +140,7 @@ describe('quickstack lifecycle CLI contracts', () => {
 
     await deploy(ctx('deploy', [serviceRoot]));
 
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });

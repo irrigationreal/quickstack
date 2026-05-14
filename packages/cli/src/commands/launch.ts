@@ -33,7 +33,7 @@ export async function launch(ctx: CliContext) {
   const name = optionValue('--name', ctx.commandArgs) || path.basename(root);
   const planResult = await createPlan(ctx, root);
   const hasDockerfile = planResult.plan.evidence.some(item => item.kind === 'dockerfile');
-  const requestedStrategy = optionValue('--build-strategy', ctx.commandArgs) || (image ? 'existing-image' : 'source-tar');
+  const requestedStrategy = optionValue('--build-strategy', ctx.commandArgs) || (image ? 'existing-image' : 'auto');
   const mode = image || requestedStrategy === 'existing-image' || requestedStrategy === 'local-docker' ? 'image' : hasDockerfile ? 'dockerfile' : 'static';
   const payload: any = { projectId, name, image: image || 'quickstack/pending-build:latest', mode, plan: planResult.plan, port: planResult.plan.ports[0] ?? 80 };
   const result: any = await request('/api/v1/agent/apps/ensure', { method: 'POST', body: JSON.stringify(payload) });

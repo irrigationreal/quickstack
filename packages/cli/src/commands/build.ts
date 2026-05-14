@@ -5,7 +5,7 @@ import { emit, printError } from '../lib/output';
 import { createPlan } from './plan';
 import { resolveBuildStrategy } from '../lib/build-strategies';
 import { normalizeExistingImage } from '../lib/build-strategies/existing-image';
-import { runLocalDocker } from '../lib/build-strategies/local-docker';
+import { resolveRegistryTunnelConfig, runLocalDocker } from '../lib/build-strategies/local-docker';
 import { runRemoteBuilder } from '../lib/build-strategies/remote-builder';
 import { runSourceTar } from '../lib/build-strategies/source-tar';
 import { resolveApp } from './apps';
@@ -31,6 +31,7 @@ function buildOptions(ctx: CliContext, plan: Awaited<ReturnType<typeof createPla
   return {
     dockerfile: optionValue('--dockerfile', ctx.commandArgs) || plan.evidence.find(item => item.kind === 'dockerfile')?.sourcePath || './Dockerfile',
     target: optionValue('--target', ctx.commandArgs),
+    platform: optionValue('--platform', ctx.commandArgs) || process.env.QUICKSTACK_DOCKER_PLATFORM || 'linux/amd64',
     buildArgs: optionValues('--build-arg', ctx.commandArgs),
     buildSecrets: optionValues('--build-secret', ctx.commandArgs),
   };
@@ -42,9 +43,15 @@ export async function executeBuildStrategy(ctx: CliContext, appId: string, root:
   if (image && (explicitStrategy === 'auto' || explicitStrategy === 'existing-image')) {
     return { status: 'success', buildResult: normalizeExistingImage(image) };
   }
-  const plan = await createPlan(ctx, root);
-  const capabilities = await getBuildCapabilities(appId);
-  const strategy = resolveBuildStrategy({ recommendations: plan.plan.buildStrategies, capabilities, userFlag: explicitStrategy });
+  const [plan, capabilities, registryTunnel] = await Promise.all([
+    createPlan(ctx, root),
+    getBuildCapabilities(appId),
+    resolveRegistryTunnelConfig(),
+  ]);
+  const effectiveCapabilities = registryTunnel && capabilities.registry?.pushCredentials === false
+    ? { ...capabilities, registry: { ...capabilities.registry, pushCredentials: true, url: registryTunnel.localUrl } }
+    : capabilities;
+  const strategy = resolveBuildStrategy({ recommendations: plan.plan.buildStrategies, capabilities: effectiveCapabilities, userFlag: explicitStrategy });
   if (strategy.strategy === 'existing-image') {
     if (!image) throw new Error('existing-image requires --image <image>.');
     return { status: 'success', buildResult: normalizeExistingImage(image) };
@@ -55,7 +62,7 @@ export async function executeBuildStrategy(ctx: CliContext, appId: string, root:
     return runRemoteBuilder(appId, { buildSecrets: options.buildSecrets });
   }
   if (strategy.strategy === 'local-docker') {
-    return runLocalDocker(appId, serviceRoot, image || defaultDockerImage(appId, capabilities.registry?.url), options);
+    return runLocalDocker(appId, serviceRoot, image || defaultDockerImage(appId, effectiveCapabilities.registry?.url), { ...options, tunnel: registryTunnel });
   }
   const appProjectId = projectId ?? (await resolveApp(appId)).projectId;
   return runSourceTar(appId, serviceRoot, { projectId: appProjectId, mode: uploadMode(plan.plan), dockerfilePath: options.dockerfile, serviceRoot: plan.plan.serviceRoot || '.', buildSecrets: options.buildSecrets });

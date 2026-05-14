@@ -49,15 +49,15 @@ function help() {
   console.log(`QuickStack CLI
 
 Usage:
-  quickstack setup --url <quickstack-url> --api-key <qstk_key>
+  quickstack setup --url <quickstack-url> --api-key <qstk_key> [--registry-ssh-host user@host] [--registry-ssh-remote-host host] [--registry-ssh-remote-port port] [--registry-local-url host:port]
   quickstack version [--json]
   quickstack whoami [--json]
   quickstack apps list [--json]
   quickstack plan [path] [--json]
-  quickstack build [path] --app <appId> [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--dockerfile <path>] [--build-arg KEY=VALUE] [--build-secret id=NAME,src=path] [--target <stage>] [--json]
+  quickstack build [path] --app <appId> [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--dockerfile <path>] [--platform linux/amd64] [--build-arg KEY=VALUE] [--build-secret id=NAME,src=path] [--target <stage>] [--json]
   quickstack doctor [appId] [--json]
   quickstack launch [path] [--plan|--dry-run] [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--image <image>] [--project <id>] [--name <name>] [--json]
-  quickstack deploy [path] [--plan|--dry-run] [--app <id>] [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--image <ref>] [--dockerfile <path>] [--build-arg KEY=VALUE] [--build-secret id=NAME,src=path] [--target <stage>] [--json]
+  quickstack deploy [path] [--plan|--dry-run] [--app <id>] [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--image <ref>] [--dockerfile <path>] [--platform linux/amd64] [--build-arg KEY=VALUE] [--build-secret id=NAME,src=path] [--target <stage>] [--json]
   quickstack restart <app> [--wait] [--json]
   quickstack suspend <app> [--json]
   quickstack resume <app> [--replicas <count>] [--json]

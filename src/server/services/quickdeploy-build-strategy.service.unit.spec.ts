@@ -13,6 +13,19 @@ describe('quickdeploy build strategy service', () => {
         expect(result).toEqual({ strategy: 'source-tar', reason: 'source-tar selected for app app-1.', cacheHit: false });
     });
 
+    it('prefers local Docker in auto mode when registry push is available', () => {
+        const getCapabilities = vi.spyOn(quickDeployBuildStrategyService, 'getCapabilities').mockReturnValue({
+            strategies: ['source-tar', 'existing-image', 'local-docker'],
+            registry: { url: 'localhost:30100', pushCredentials: true },
+            remoteBuilder: false,
+        });
+
+        const result = quickDeployBuildStrategyService.resolveForApp('app-1', recommendations, 'auto');
+
+        expect(result.strategy).toBe('local-docker');
+        getCapabilities.mockRestore();
+    });
+
     it('honors an available explicit user strategy', () => {
         const result = quickDeployBuildStrategyService.resolveForApp('app-1', recommendations, 'local-docker');
 

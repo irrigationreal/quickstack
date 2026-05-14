@@ -23,13 +23,19 @@ class QuickDeployBuildStrategyService {
         }
 
         const capabilities = this.getCapabilities();
+        const sortedRecommendations = [...recommendations].sort((left, right) => left.priority - right.priority);
         const explicit = userFlag && userFlag !== 'auto';
-        const requested = explicit ? userFlag : recommendations.sort((left, right) => left.priority - right.priority)[0]?.strategy ?? 'source-tar';
+        const localDockerRecommended = sortedRecommendations.some(item => item.strategy === 'local-docker');
+        const requested = explicit
+            ? userFlag
+            : localDockerRecommended && capabilities.strategies.includes('local-docker') && capabilities.registry?.pushCredentials !== false
+                ? 'local-docker'
+                : sortedRecommendations[0]?.strategy ?? 'source-tar';
         if (!capabilities.strategies.includes(requested)) {
             if (requested === 'remote-builder' && explicit) {
                 throw new ServiceException('remote builder is not configured on this server.');
             }
-            const fallback = recommendations.find(item => capabilities.strategies.includes(item.strategy))?.strategy;
+            const fallback = sortedRecommendations.find(item => capabilities.strategies.includes(item.strategy))?.strategy;
             if (!fallback) {
                 throw new ServiceException(`No supported build strategy is available for app ${appId}.`);
             }
@@ -39,7 +45,7 @@ class QuickDeployBuildStrategyService {
             if (explicit) {
                 throw new ServiceException('remote builder is not configured on this server.');
             }
-            const fallback = recommendations.find(item => item.strategy !== 'remote-builder' && capabilities.strategies.includes(item.strategy))?.strategy;
+            const fallback = sortedRecommendations.find(item => item.strategy !== 'remote-builder' && capabilities.strategies.includes(item.strategy))?.strategy;
             if (fallback) {
                 return { strategy: fallback, reason: `remote-builder is unavailable; using ${fallback}.`, cacheHit: false };
             }
