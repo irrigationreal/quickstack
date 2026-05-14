@@ -59,22 +59,31 @@ function reject(socket: import('node:net').Socket, status: number, message: stri
 
 export default async function initializeWebsocket(server: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>) {
   const execStreams = new WebSocketServer({ noServer: true });
+  const existingUpgradeListeners = server.rawListeners('upgrade');
+  server.removeAllListeners('upgrade');
 
-  server.on('upgrade', async (request, socket, head) => {
+  server.on('upgrade', (request, socket, head) => {
     const requestUrl = new URL(request.url || '/', 'http://quickstack.local');
     const match = requestUrl.pathname.match(/^\/api\/v1\/agent\/apps\/([^/]+)\/exec\/stream$/);
-    if (!match) return;
-
-    try {
-      const appId = decodeURIComponent(match[1]);
-      const authorized = await authorizeExecStream(request, appId);
-      const command = parseCommand(request);
-      execStreams.handleUpgrade(request, socket, head, ws => {
-        execStreams.emit('connection', ws, request, { app: authorized.app, actor: authorized.authenticated.auditActor, command });
-      });
-    } catch (error) {
-      reject(socket as import('node:net').Socket, (error as any)?.status ?? 401, error instanceof Error ? error.message : 'Unauthorized');
+    if (!match) {
+      for (const listener of existingUpgradeListeners) {
+        listener.call(server, request, socket, head);
+      }
+      return;
     }
+
+    void (async () => {
+      try {
+        const appId = decodeURIComponent(match[1]);
+        const authorized = await authorizeExecStream(request, appId);
+        const command = parseCommand(request);
+        execStreams.handleUpgrade(request, socket, head, ws => {
+          execStreams.emit('connection', ws, request, { app: authorized.app, actor: authorized.authenticated.auditActor, command });
+        });
+      } catch (error) {
+        reject(socket as import('node:net').Socket, (error as any)?.status ?? 401, error instanceof Error ? error.message : 'Unauthorized');
+      }
+    })();
   });
 
   execStreams.on('connection', (ws: WebSocket, _request: http.IncomingMessage, context: any) => {
