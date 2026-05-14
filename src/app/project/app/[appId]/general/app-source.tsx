@@ -5,11 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useDialog } from "@/frontend/states/zustand.states";
 import { AppExtendedModel } from "@/shared/model/app-extended.model";
 import { AppBuildMethod } from "@/shared/model/app-source-info.model";
-import { Container, FileCode2, GitBranch, KeyRound, Link as LinkIcon, LockKeyhole, Package, Server } from "lucide-react";
+import { Container, FileCode2, GitBranch, KeyRound, Link as LinkIcon, LockKeyhole, Package, Server, UploadCloud } from "lucide-react";
 import { AppSourceWizardDialog } from "./app-source-wizard/app-source-wizard-dialog";
 import { PublicDeployKeyDialog } from "./app-source-wizard/public-deploy-key-dialog";
 import { ReadonlyInfo } from "./app-source-wizard/readonly-info";
-import { buildMethodLabels, defaultDockerfilePath, SourceType, sourceTypeLabels } from "./app-source-wizard/types";
+import { buildMethodLabels, defaultDockerfilePath } from "./app-source-wizard/types";
 import { AppSourceUtils } from "@/frontend/utils/app-source.utils";
 
 export default function GeneralAppSource({ app, readonly, gitSshPublicKey }: {
@@ -75,11 +75,25 @@ function EmptySourceState({ readonly, onConnect }: { readonly: boolean; onConnec
     );
 }
 
+function BuildMethodInfo({ app }: { app: AppExtendedModel }) {
+    return (
+        <>
+            <ReadonlyInfo label="Build method" value={buildMethodLabels[(app.buildMethod as AppBuildMethod) ?? 'RAILPACK']} />
+            {app.buildMethod === 'DOCKERFILE' && (
+                <ReadonlyInfo icon={FileCode2} label="Dockerfile path" value={app.dockerfilePath || defaultDockerfilePath} />
+            )}
+        </>
+    );
+}
+
 function ConfiguredSourceSummary({ app, gitSshPublicKey }: { app: AppExtendedModel; gitSshPublicKey?: string }) {
     const { openDialog } = useDialog();
-    const sourceType = app.sourceType as SourceType;
+    const sourceType = app.sourceType;
     const isGitSource = sourceType === 'GIT' || sourceType === 'GIT_SSH';
-    const Icon = sourceType === 'CONTAINER' ? Container : sourceType === 'GIT_SSH' ? KeyRound : GitBranch;
+    const isUploadedSource = sourceType === 'QUICKDEPLOY_UPLOAD';
+    const sourceTypeLabel = AppSourceUtils.getSourceTypeLabel(sourceType);
+    const sourceDescription = AppSourceUtils.getSourceDescription(app);
+    const Icon = sourceType === 'CONTAINER' ? Container : sourceType === 'GIT_SSH' ? KeyRound : isUploadedSource ? UploadCloud : GitBranch;
 
     return (
         <div className="space-y-4">
@@ -89,9 +103,9 @@ function ConfiguredSourceSummary({ app, gitSshPublicKey }: { app: AppExtendedMod
                         <Icon className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div className="min-w-0">
-                        <p className="font-medium">{sourceTypeLabels[sourceType]}</p>
+                        <p className="font-medium">{sourceTypeLabel}</p>
                         <p className="truncate font-mono text-sm text-muted-foreground">
-                            {isGitSource ? app.gitUrl : app.containerImageSource}
+                            {sourceDescription}
                         </p>
                     </div>
                 </div>
@@ -120,16 +134,19 @@ function ConfiguredSourceSummary({ app, gitSshPublicKey }: { app: AppExtendedMod
                                 ) : undefined}
                             />
                         )}
-                        <ReadonlyInfo label="Build method" value={buildMethodLabels[(app.buildMethod as AppBuildMethod) ?? 'RAILPACK']} />
-                        {app.buildMethod === 'DOCKERFILE' && (
-                            <ReadonlyInfo icon={FileCode2} label="Dockerfile path" value={app.dockerfilePath || defaultDockerfilePath} />
-                        )}
+                        <BuildMethodInfo app={app} />
                     </>
                 )}
                 {sourceType === 'CONTAINER' && (
                     <>
                         <ReadonlyInfo icon={Package} label="Image" value={app.containerImageSource ?? 'Not configured'} />
                         <ReadonlyInfo icon={LockKeyhole} label="Registry credentials" value={app.containerRegistryUsername || app.containerRegistryPassword ? 'Configured' : 'Not configured'} />
+                    </>
+                )}
+                {isUploadedSource && (
+                    <>
+                        <ReadonlyInfo icon={UploadCloud} label="Source" value="Uploaded by QuickStack CLI" />
+                        <BuildMethodInfo app={app} />
                     </>
                 )}
             </div>

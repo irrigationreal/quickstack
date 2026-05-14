@@ -90,6 +90,14 @@ export class KubeSizeConverter {
         return nanoCpu / 1_000_000_000;
     }
 
+    static fromKubeCpuToCores(kubernetesCpuMetric: string | undefined): number {
+        return kubernetesCpuMetric ? this.fromNanoToFullCpu(this.fromKubeSizeToNanoCpu(kubernetesCpuMetric)) : 0;
+    }
+
+    static fromOptionalKubeSizeToBytes(kubernetesSizeFormat: string | undefined): number {
+        return kubernetesSizeFormat ? this.fromKubeSizeToBytes(kubernetesSizeFormat) : 0;
+    }
+
     /**
     * Formats the given size in megabytes to a Kubernetes readable format.
     */

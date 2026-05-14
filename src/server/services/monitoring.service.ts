@@ -11,6 +11,18 @@ import pvcService from "./pvc.service";
 import { KubeObjectNameUtils } from "../utils/kube-object-name.utils";
 import projectService from "./project.service";
 import { AppMonitoringUsageModel } from "@/shared/model/app-monitoring-usage.model";
+import { getKubernetesListItems, KubernetesListResponse } from "../utils/kubernetes-client-compat.utils";
+
+type PodMetric = {
+    metadata?: { name?: string; namespace?: string };
+    containers?: Array<{ usage?: { cpu?: string; memory?: string } }>;
+};
+
+type PodResourceUsage = {
+    pod: k8s.V1Pod;
+    cpuCores: number;
+    memoryBytes: number;
+};
 
 class MonitorService {
 
@@ -73,19 +85,24 @@ class MonitorService {
 
     async getMonitoringForAllApps() {
         const [topPods, totalResourcesNodes, projects] = await Promise.all([
-            k8s.topPods(k3s.core, new k8s.Metrics(k3s.getKubeConfig())),
+            this.getTopPods(),
             this.getTotalAvailableNodeResources(),
             projectService.getAllProjects()
         ]);
 
         const appStats: AppMonitoringUsageModel[] = [];
-        const topPodsByApp = new Map<string, k8s.PodStatus[]>();
+        const topPodsByApp = new Map<string, PodResourceUsage[]>();
         for (const topPod of topPods) {
-            const namespace = topPod.Pod.metadata?.namespace;
-            const appId = topPod.Pod.metadata?.labels?.app;
+            const namespace = topPod.pod.metadata?.namespace;
+            const appId = topPod.pod.metadata?.labels?.app;
             if (!namespace || !appId) continue;
             const key = `${namespace}/${appId}`;
-            topPodsByApp.set(key, [...(topPodsByApp.get(key) ?? []), topPod]);
+            const appPods = topPodsByApp.get(key);
+            if (appPods) {
+                appPods.push(topPod);
+            } else {
+                topPodsByApp.set(key, [topPod]);
+            }
         }
 
         for (const project of projects) {
@@ -114,15 +131,13 @@ class MonitorService {
     }
 
     async getMonitoringForApp(projectId: string, appId: string): Promise<PodsResourceInfoModel> {
-        const metricsClient = new k8s.Metrics(k3s.getKubeConfig());
-        const podsFromApp = await standalonePodService.getPodsForApp(projectId, appId);
-        const topPods = await k8s.topPods(k3s.core, metricsClient, projectId);
-
-        const filteredTopPods = topPods.filter((topPod) =>
-            podsFromApp.some((pod) => pod.podName === topPod.Pod.metadata?.name)
-        );
-
-        const totalResourcesNodes = await this.getTotalAvailableNodeResources();
+        const [podsFromApp, topPods, totalResourcesNodes] = await Promise.all([
+            standalonePodService.getPodsForApp(projectId, appId),
+            this.getTopPods(projectId),
+            this.getTotalAvailableNodeResources(),
+        ]);
+        const podNames = new Set(podsFromApp.map((pod) => pod.podName));
+        const filteredTopPods = topPods.filter((topPod) => podNames.has(topPod.pod.metadata?.name ?? ''));
         const totalResourcesApp = this.calculateTotalResourceUsageOfApp(filteredTopPods);
 
         const totalRamNodesCorrectUnit: number = totalResourcesNodes.ramBytes;
@@ -139,15 +154,36 @@ class MonitorService {
         }
     }
 
-    private calculateTotalResourceUsageOfApp(filteredTopPods: k8s.PodStatus[]) {
+    private calculateTotalResourceUsageOfApp(filteredTopPods: PodResourceUsage[]) {
         return filteredTopPods.reduce(
             (acc, pod) => {
-                acc.cpu += Number(pod.CPU.CurrentUsage) || 0;
-                acc.ramBytes += Number(pod.Memory.CurrentUsage) || 0;
+                acc.cpu += pod.cpuCores;
+                acc.ramBytes += pod.memoryBytes;
                 return acc;
             },
             { cpu: 0, ramBytes: 0 }
         );
+    }
+
+    private async getTopPods(namespace?: string): Promise<PodResourceUsage[]> {
+        const [podMetricsResponse, podListResponse] = await Promise.all([
+            k3s.metrics.getPodMetrics(namespace),
+            namespace ? k3s.core.listNamespacedPod(namespace) : k3s.core.listPodForAllNamespaces(),
+        ]);
+        const podMetrics = getKubernetesListItems<PodMetric>(podMetricsResponse as KubernetesListResponse<PodMetric>);
+        const pods = getKubernetesListItems<k8s.V1Pod>(podListResponse as KubernetesListResponse<k8s.V1Pod>);
+        const podsByKey = new Map(pods.map(pod => [`${pod.metadata?.namespace ?? namespace}/${pod.metadata?.name}`, pod]));
+
+        return podMetrics.flatMap((metric) => {
+            const pod = podsByKey.get(`${metric.metadata?.namespace ?? namespace}/${metric.metadata?.name}`);
+            if (!pod) return [];
+            const containers = metric.containers ?? [];
+            return [{
+                pod,
+                cpuCores: containers.reduce((total, container) => total + KubeSizeConverter.fromKubeCpuToCores(container.usage?.cpu), 0),
+                memoryBytes: containers.reduce((total, container) => total + KubeSizeConverter.fromOptionalKubeSizeToBytes(container.usage?.memory), 0),
+            }];
+        });
     }
 
     private async getTotalAvailableNodeResources() {

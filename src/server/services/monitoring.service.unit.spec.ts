@@ -1,10 +1,21 @@
-const k8sMocks = vi.hoisted(() => ({ topPods: vi.fn(), Metrics: vi.fn() }));
+const coreMocks = vi.hoisted(() => ({ listPodForAllNamespaces: vi.fn(), listNamespacedPod: vi.fn() }));
+const metricsMocks = vi.hoisted(() => ({ getPodMetrics: vi.fn() }));
 const clusterMocks = vi.hoisted(() => ({ getNodeInfo: vi.fn() }));
 const projectMocks = vi.hoisted(() => ({ getAllProjects: vi.fn() }));
 const podMocks = vi.hoisted(() => ({ getPodsForApp: vi.fn() }));
 
-vi.mock('@kubernetes/client-node', () => k8sMocks);
-vi.mock('../adapter/kubernetes-api.adapter', () => ({ default: { core: {}, getKubeConfig: vi.fn(), metrics: {} } }));
+vi.mock('@kubernetes/client-node', () => ({}));
+vi.mock('../adapter/kubernetes-api.adapter', () => ({
+    default: {
+        core: {
+            listPodForAllNamespaces: coreMocks.listPodForAllNamespaces,
+            listNamespacedPod: coreMocks.listNamespacedPod,
+        },
+        metrics: {
+            getPodMetrics: metricsMocks.getPodMetrics,
+        },
+    }
+}));
 vi.mock('./cluster.service', () => ({ default: clusterMocks }));
 vi.mock('./project.service', () => ({ default: projectMocks }));
 vi.mock('./standalone-services/standalone-pod.service', () => ({ default: podMocks }));
@@ -21,13 +32,16 @@ describe('monitoringService.getMonitoringForAllApps', () => {
         projectMocks.getAllProjects.mockResolvedValue([
             { id: 'proj-1', name: 'Project 1', apps: [{ id: 'app-1', name: 'App 1' }, { id: 'app-2', name: 'App 2' }] },
         ]);
-        k8sMocks.topPods.mockResolvedValue([
-            {
-                Pod: { metadata: { namespace: 'proj-1', name: 'app-1-pod', labels: { app: 'app-1' } } },
-                CPU: { CurrentUsage: 0.25 },
-                Memory: { CurrentUsage: BigInt(104857600) },
-            },
-        ]);
+        coreMocks.listPodForAllNamespaces.mockResolvedValue({
+            items: [
+                { metadata: { namespace: 'proj-1', name: 'app-1-pod', labels: { app: 'app-1' } } },
+            ],
+        });
+        metricsMocks.getPodMetrics.mockResolvedValue({
+            items: [
+                { metadata: { namespace: 'proj-1', name: 'app-1-pod' }, containers: [{ name: 'app', usage: { cpu: '250m', memory: '100Mi' } }] },
+            ],
+        });
     });
 
     it('builds app resource usage from metrics labels without listing pods per app', async () => {

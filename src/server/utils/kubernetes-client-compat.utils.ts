@@ -1,5 +1,7 @@
 type KubernetesApiMethodArgs = unknown[];
 
+export type KubernetesListResponse<T> = { items: T[] } | { body: { items: T[] } };
+
 type LegacyCall = {
     params: Record<string, unknown>;
     options?: unknown;
@@ -10,6 +12,10 @@ const MUTATION_PARAMS = ['pretty', 'dryRun', 'fieldManager', 'fieldValidation'];
 const DELETE_PARAMS = ['pretty', 'dryRun', 'gracePeriodSeconds', 'orphanDependents', 'propagationPolicy', 'body'];
 const PATCH_PARAMS = ['pretty', 'dryRun', 'fieldManager', 'fieldValidation', 'force'];
 const CUSTOM_OBJECT_LIST_PARAMS = LIST_PARAMS.filter(name => name !== 'sendInitialEvents');
+
+export function getKubernetesListItems<T>(response: KubernetesListResponse<T>): T[] {
+    return 'body' in response ? response.body.items : response.items;
+}
 
 function isObjectParamCall(args: KubernetesApiMethodArgs) {
     if (args.length === 0 || typeof args[0] !== 'object' || args[0] === null || Array.isArray(args[0])) {

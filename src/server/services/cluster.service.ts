@@ -7,6 +7,12 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import longhornApiAdapter from "../adapter/longhorn-api.adapter";
 import { KubeSizeConverter } from "../../shared/utils/kubernetes-size-converter.utils";
 import { CatchUtils } from "@/shared/utils/catch.utils";
+import { getKubernetesListItems, KubernetesListResponse } from "../utils/kubernetes-client-compat.utils";
+
+type NodeMetric = {
+    metadata?: { name?: string };
+    usage?: { cpu?: string; memory?: string };
+};
 
 class ClusterService {
 
@@ -71,32 +77,24 @@ class ClusterService {
     }
 
     async getNodeResourceUsage(): Promise<NodeResourceModel[]> {
-        const topNodes = await k8s.topNodes(k3s.core);
+        const [nodesResponse, metricsResponse] = await Promise.all([
+            k3s.core.listNode(),
+            k3s.metrics.getNodeMetrics(),
+        ]);
+        const nodes = getKubernetesListItems<k8s.V1Node>(nodesResponse as KubernetesListResponse<k8s.V1Node>);
+        const metricsData = getKubernetesListItems<NodeMetric>(metricsResponse as KubernetesListResponse<NodeMetric>);
+        const metricsByNodeName = new Map(metricsData.map(metric => [metric.metadata?.name, metric]));
 
-        const metricsData: k8s.NodeMetricsList = await k3s.metrics.getNodeMetrics();
-
-        return await Promise.all(topNodes.map(async (node) => {
-            const nodeMetrics = metricsData.items.filter((metric) => metric.metadata.name === node.Node.metadata?.name)
-                .map((metric) => {
-                    return {
-                        timestamp: new Date(metric.timestamp),
-                        cpuUsage: KubeSizeConverter.fromNanoToFullCpu(KubeSizeConverter.fromKubeSizeToNanoCpu(metric.usage.cpu)),
-                        ramUsage: KubeSizeConverter.fromKubeSizeToBytes(metric.usage.memory)
-                    }
-                });
-
-            // sorted by timestamp descending
-            nodeMetrics.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-            const latestUsageItem = nodeMetrics[0];
-
-            const diskInfo = await CatchUtils.resultOrUndefined(() => longhornApiAdapter.getNodeStorageInfo(node.Node.metadata?.name!));
+        return await Promise.all(nodes.map(async (node) => {
+            const metric = metricsByNodeName.get(node.metadata?.name);
+            const diskInfo = await CatchUtils.resultOrUndefined(() => longhornApiAdapter.getNodeStorageInfo(node.metadata?.name!));
 
             return {
-                name: node.Node.metadata?.name!,
-                cpuUsage: latestUsageItem.cpuUsage,
-                cpuCapacity: Number(node.CPU?.Capacity!),
-                ramUsage: latestUsageItem.ramUsage,
-                ramCapacity: Number(node.Memory?.Capacity!),
+                name: node.metadata?.name!,
+                cpuUsage: KubeSizeConverter.fromKubeCpuToCores(metric?.usage?.cpu),
+                cpuCapacity: KubeSizeConverter.fromKubeCpuToCores(node.status?.capacity?.cpu),
+                ramUsage: KubeSizeConverter.fromOptionalKubeSizeToBytes(metric?.usage?.memory),
+                ramCapacity: KubeSizeConverter.fromOptionalKubeSizeToBytes(node.status?.capacity?.memory),
                 diskUsageAbsolut: diskInfo ? diskInfo.totalStorageMaximum - diskInfo.totalStorageAvailable : undefined,
                 diskUsageReserved: diskInfo?.totalStorageReserved,
                 diskUsageCapacity: diskInfo?.totalStorageMaximum,
