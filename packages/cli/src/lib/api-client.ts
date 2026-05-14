@@ -6,6 +6,7 @@ import { configString, readQuickStackConfig } from './state';
 import type { AgentMeResponse } from '../../../../src/shared/model/agent-me.model';
 import type { AgentAppListResponse } from '../../../../src/shared/model/agent-app-list.model';
 import type { AgentLaunchPlan, AgentLaunchPlanRequest } from '../../../../src/shared/model/agent-launch-plan.model';
+import type { BuildCapabilities, BuildCreateRequest, BuildResult } from '../../../../src/shared/model/agent-build-strategy.model';
 
 export const CHUNK_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
 export const CHUNK_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
@@ -62,6 +63,22 @@ export function listApps({ projectId }: { projectId?: string } = {}) {
 
 export function postLaunchPlan(payload: AgentLaunchPlanRequest) {
   return request<AgentLaunchPlan>('/api/v1/agent/launch-plan', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function getBuildCapabilities(appId: string) {
+  return request<BuildCapabilities>(`/api/v1/agent/apps/${encodeURIComponent(appId)}/builds`);
+}
+
+export function createBuild(appId: string, payload: BuildCreateRequest) {
+  return request<{ status: string; buildResult: BuildResult }>(`/api/v1/agent/apps/${encodeURIComponent(appId)}/builds`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function deployImage(appId: string, buildResult: BuildResult) {
+  return request(`/api/v1/agent/apps/${encodeURIComponent(appId)}/deploy`, { method: 'POST', body: JSON.stringify({ buildResult }) });
+}
+
+export async function uploadBuildTar(appId: string, tarPath: string, metadata: Record<string, unknown>) {
+  return uploadBuild(appId, tarPath, metadata);
 }
 
 export async function uploadBuild(appId: string, tarPath: string, metadata: Record<string, unknown>) {

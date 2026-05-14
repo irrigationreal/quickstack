@@ -6,6 +6,7 @@ const apiKeyMocks = vi.hoisted(() => ({
 
 const appMocks = vi.hoisted(() => ({
     getById: vi.fn(),
+    save: vi.fn(),
     buildAndDeploy: vi.fn(),
 }));
 
@@ -90,5 +91,25 @@ describe('agent deploy route', () => {
             actorType: 'API_KEY',
             apiKeyId: 'key-1',
         }));
+    });
+
+    it('deploys a normalized build result by updating the app image first', async () => {
+        const buildResult = {
+            image: { registry: 'registry.example', repository: 'app', tag: 'local' },
+            imageReference: 'registry.example/app:local',
+            strategy: 'local-docker',
+            sourceProvenance: 'local-docker',
+            cacheHit: false,
+        };
+        const response = await POST(new Request('http://quickstack.test/api/v1/agent/apps/app-1/deploy', {
+            method: 'POST',
+            headers: { authorization: 'Bearer qstk_prefix_secret' },
+            body: JSON.stringify({ buildResult }),
+        }), { params: Promise.resolve({ appId: 'app-1' }) });
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(appMocks.save).toHaveBeenCalledWith({ id: 'app-1', containerImageSource: 'registry.example/app:local', sourceType: 'CONTAINER' }, false);
+        expect(body.buildResult).toEqual(buildResult);
     });
 });

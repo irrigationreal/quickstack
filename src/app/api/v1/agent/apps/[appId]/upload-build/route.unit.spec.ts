@@ -9,6 +9,7 @@ const auditMocks = vi.hoisted(() => ({ recordBestEffort: vi.fn() }));
 const uploadMocks = vi.hoisted(() => ({
     getDefaultMaxUploadBytes: vi.fn(() => 1024),
     acceptUpload: vi.fn(),
+    normalizeBuildResult: vi.fn(),
 }));
 const authMocks = vi.hoisted(() => ({ assertSessionCanWriteApp: vi.fn() }));
 
@@ -68,6 +69,14 @@ describe('agent QuickDeploy upload route', () => {
             imageReference: 'registry-svc.registry-and-build.svc.cluster.local:5000/app-1:qd-abc-build-1',
             status: 'UPLOADED',
         });
+        uploadMocks.normalizeBuildResult.mockReturnValue({
+            image: { registry: 'registry-svc.registry-and-build.svc.cluster.local:5000', repository: 'app-1', tag: 'qd-abc-build-1' },
+            imageReference: 'registry-svc.registry-and-build.svc.cluster.local:5000/app-1:qd-abc-build-1',
+            strategy: 'source-tar',
+            sourceProvenance: 'sha256:abc',
+            cacheHit: false,
+            buildId: 'build-1',
+        });
     });
 
     afterEach(async () => {
@@ -104,6 +113,7 @@ describe('agent QuickDeploy upload route', () => {
             actor: authenticated.auditActor,
         }));
         expect(json.imageReference).toBe('registry-svc.registry-and-build.svc.cluster.local:5000/app-1:qd-abc-build-1');
+        expect(json.buildResult).toEqual(expect.objectContaining({ strategy: 'source-tar', imageReference: 'registry-svc.registry-and-build.svc.cluster.local:5000/app-1:qd-abc-build-1' }));
     });
 
     it('rejects oversized uploads before storing them', async () => {

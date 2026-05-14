@@ -192,6 +192,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
             body: upload.body,
             actor: authenticated.auditActor,
         });
+        if (!build.imageReference) {
+            return badRequest('QuickDeploy build did not produce an image reference.');
+        }
+        const buildResult = quickDeployUploadService.normalizeBuildResult({
+            imageReference: build.imageReference,
+            strategy: 'source-tar',
+            sourceProvenance: parsed.data.contentHash,
+            cacheHit: false,
+            sizeBytes: build.uploadBytes,
+            buildId: build.id,
+        });
         return NextResponse.json({
             status: 'success',
             buildId: build.id,
@@ -201,6 +212,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
             uploadBytes: build.uploadBytes,
             imageReference: build.imageReference,
             buildStatus: build.status,
+            buildResult,
         });
     } catch (error) {
         await auditService.recordBestEffort({

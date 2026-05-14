@@ -7,6 +7,9 @@ import { createPlan } from './plan';
 
 export async function launch(ctx: CliContext) {
   const root = path.resolve(ctx.commandArgs.find(arg => !arg.startsWith('-')) || process.cwd());
+  if (optionValue('--build-strategy', ctx.commandArgs) === 'remote-builder') {
+    printError(ctx, 'remote builder is not configured on this server.', 2);
+  }
   if (ctx.commandArgs.includes('--plan') || ctx.commandArgs.includes('--dry-run')) {
     const result = await createPlan(ctx, root);
     emit(ctx, result.plan.questions.length > 0 ? 'question' : 'success', {

@@ -8,6 +8,7 @@ import auditService, { AuditActor } from "./audit.service";
 import securityQuotaService from "./security-quota.service";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { QuickDeployUploadMetadataModel } from "@/shared/model/quickdeploy.model";
+import { BuildResult, BuildStrategy } from "@/shared/model/agent-build-strategy.model";
 import registryService, { REGISTRY_URL_EXTERNAL, REGISTRY_URL_INTERNAL } from "./registry.service";
 import { PathUtils } from "../utils/path.utils";
 
@@ -115,6 +116,31 @@ async function assertRegistryResponse(response: Response, action: string) {
 }
 
 class QuickDeployUploadService {
+    normalizeBuildResult(input: { imageReference: string; strategy: BuildStrategy; sourceProvenance: string; cacheHit?: boolean; sizeBytes?: number; buildId?: string }): BuildResult {
+        const slashIndex = input.imageReference.indexOf('/');
+        const imagePath = slashIndex >= 0 ? input.imageReference.slice(slashIndex + 1) : input.imageReference;
+        const registry = slashIndex >= 0 ? input.imageReference.slice(0, slashIndex) : '';
+        const digestIndex = imagePath.indexOf('@');
+        const tagIndex = imagePath.lastIndexOf(':');
+        const repository = digestIndex >= 0
+            ? imagePath.slice(0, digestIndex)
+            : tagIndex > 0 ? imagePath.slice(0, tagIndex) : imagePath;
+        return {
+            image: {
+                registry,
+                repository,
+                digest: digestIndex >= 0 ? imagePath.slice(digestIndex + 1) : undefined,
+                tag: tagIndex > 0 && digestIndex < 0 ? imagePath.slice(tagIndex + 1) : undefined,
+            },
+            imageReference: input.imageReference,
+            strategy: input.strategy,
+            sourceProvenance: input.sourceProvenance,
+            cacheHit: Boolean(input.cacheHit),
+            sizeBytes: input.sizeBytes,
+            buildId: input.buildId,
+        };
+    }
+
     getDefaultMaxUploadBytes() {
         return DEFAULT_MAX_UPLOAD_BYTES;
     }

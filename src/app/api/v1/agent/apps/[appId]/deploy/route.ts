@@ -4,6 +4,7 @@ import auditService from "@/server/services/audit.service";
 import buildWatchService from "@/server/services/standalone-services/build-watch.service";
 import deploymentEventWatchService from "@/server/services/standalone-services/deployment-event-watch.service";
 import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
+import { BuildResultZodModel } from "@/shared/model/agent-build-strategy.model";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         return forbidden();
     }
 
+    const parsedBody = await request.json().catch(() => null);
+    const parsedBuildResult = BuildResultZodModel.safeParse(parsedBody?.buildResult);
+    if (parsedBuildResult.success) {
+        await appService.save({
+            id: app.id,
+            containerImageSource: parsedBuildResult.data.imageReference,
+            sourceType: 'CONTAINER',
+        }, false);
+    }
+
     buildWatchService.startWatch();
     deploymentEventWatchService.startWatch();
 
@@ -88,5 +99,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         status: 'success',
         body: 'Deployment triggered.',
         deploymentId: deployment.deploymentId,
+        buildResult: parsedBuildResult.success ? parsedBuildResult.data : undefined,
     });
 }

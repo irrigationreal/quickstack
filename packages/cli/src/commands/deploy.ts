@@ -6,6 +6,9 @@ import { createPlan } from './plan';
 
 export async function deploy(ctx: CliContext) {
   const root = process.cwd();
+  if (optionValue('--build-strategy', ctx.commandArgs) === 'remote-builder') {
+    printError(ctx, 'remote builder is not configured on this server.', 2);
+  }
   if (ctx.commandArgs.includes('--plan') || ctx.commandArgs.includes('--dry-run')) {
     const explicitRoot = ctx.commandArgs.find(arg => !arg.startsWith('-'));
     const result = await createPlan(ctx, explicitRoot || root);
