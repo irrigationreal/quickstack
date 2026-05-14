@@ -79,7 +79,7 @@ describe('quickstack lifecycle CLI contracts', () => {
     await deploy(ctx('deploy', [root]));
 
     expect(appMocks.resolveApp).not.toHaveBeenCalled();
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root);
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     expect(apiMocks.request).not.toHaveBeenCalledWith('/api/v1/agent/apps/app-1/deploy', { method: 'POST' });
     log.mockRestore();
@@ -93,7 +93,7 @@ describe('quickstack lifecycle CLI contracts', () => {
 
     await deploy(ctx('deploy', [root]));
 
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root);
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });
@@ -107,7 +107,7 @@ describe('quickstack lifecycle CLI contracts', () => {
 
     await deploy(ctx('deploy', [serviceRoot]));
 
-    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root);
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });

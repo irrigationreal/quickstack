@@ -8,6 +8,8 @@ import { resolveApp } from './apps';
 import { executeBuildStrategy } from './build';
 import { createPlan } from './plan';
 
+const DEPLOY_USAGE = 'Usage: quickstack deploy [path] [--plan|--dry-run] [--app <app>] [--build-strategy auto|source-tar|local-docker|existing-image|remote-builder] [--image <ref>] [--dockerfile <path>] [--build-arg KEY=VALUE] [--build-secret id=NAME,src=path] [--target <stage>] [--json]';
+
 function durationMs(value?: string) {
   if (!value) return 10 * 60 * 1000;
   const match = value.match(/^(\d+)(ms|s|m)?$/i);
@@ -49,9 +51,9 @@ export async function deploy(ctx: CliContext) {
   }
   const state = await readProjectState(root);
   const explicit = explicitApp || (positionalIsPath ? undefined : positional);
-  const selected = explicit ? { appId: (await resolveApp(explicit)).id } : selectStateForPath(state, root, requestedRoot) ?? (state.apps.length === 1 ? state.apps[0] : undefined);
-  if (!selected?.appId) printError(ctx, 'Usage: quickstack deploy [path] [--app <app>] [--json]');
-  const build = await executeBuildStrategy(ctx, selected.appId, root);
+  const selected = explicit ? await resolveApp(explicit).then(app => ({ appId: app.id, projectId: app.projectId })) : selectStateForPath(state, root, requestedRoot) ?? (state.apps.length === 1 ? state.apps[0] : undefined);
+  if (!selected?.appId) printError(ctx, DEPLOY_USAGE);
+  const build = await executeBuildStrategy(ctx, selected.appId, root, selected.projectId, 'source-tar');
   const result: any = await deployImage(selected.appId, build.buildResult);
   if (ctx.commandArgs.includes('--wait') && result.deploymentId) {
     let latest;
