@@ -41,7 +41,7 @@ export async function launch(ctx: CliContext) {
   let deployment;
   let buildResult;
   if (appId) {
-    const build = await executeBuildStrategy(ctx, appId, root, projectId);
+    const build = await executeBuildStrategy(ctx, appId, root, projectId, requestedStrategy);
     buildResult = build.buildResult;
     deployment = buildResult ? await deployImage(appId, buildResult) : undefined;
   }

@@ -21,8 +21,7 @@ export default function ChartDiskResources({
     const diskReserved = nodeResource.diskUsageReserved ?? 0;
     const diskCapacity = nodeResource.diskUsageCapacity ?? 0;
     const diskSchedulable = nodeResource.diskSpaceSchedulable ?? Math.max(0, diskCapacity - diskUsed - diskReserved);
-    const diskUsedAndReserved = diskUsed + diskReserved;
-    const diskUsagePercent = diskCapacity > 0 ? (diskUsedAndReserved / diskCapacity) * 100 : 0;
+    const diskUsagePercent = diskCapacity > 0 ? (diskUsed / diskCapacity) * 100 : 0;
 
     const chartData = [{
         diskUsed,
@@ -58,9 +57,7 @@ export default function ChartDiskResources({
                 <ChartTooltip
                     cursor={false}
                     content={<ChartTooltipContent hideLabel formatter={(value, name) => {
-                        // Convert the value from bytes to gigabytes
                         const formattedValue = KubeSizeConverter.convertBytesToReadableSize(value as number);
-                        // Optionally, you can customize the label (name) here if needed
                         return <div className='flex gap-2'>
                             <div className='self-center rounded w-2 h-2' style={{ backgroundColor: (chartConfig as any)[name].color }}></div>
                             <div className='flex-1'>{(chartConfig as any)[name].label}:</div>
@@ -101,7 +98,7 @@ export default function ChartDiskResources({
                                             x={viewBox.cx}
                                             y={(viewBox.cy || 0) + 30}
                                             className="fill-muted-foreground">
-                                            {KubeSizeConverter.convertBytesToReadableSize(diskUsedAndReserved, 1, true)} / {KubeSizeConverter.convertBytesToReadableSize(diskCapacity, 1)}
+                                            {KubeSizeConverter.convertBytesToReadableSize(diskUsed, 1, true)} / {KubeSizeConverter.convertBytesToReadableSize(diskCapacity, 1)}
                                         </tspan>
                                     </text>
                                 );
@@ -134,83 +131,3 @@ export default function ChartDiskResources({
         </ChartContainer>
     );
 }
-
-
-/*
- <CardContent className="flex-1 pb-0">
-            <ChartContainer
-                config={chartConfig}
-                className="mx-auto aspect-square max-h-[250px]">
-
-                <RadialBarChart
-                    data={chartData}
-                    innerRadius={80}
-                    outerRadius={110} >
-
-                    <PolarGrid
-                        gridType="circle"
-                        radialLines={false}
-                        stroke="none"
-                        className="first:fill-muted last:fill-background"
-                        polarRadius={[86, 74]}
-                    />
-
-                    <RadialBar
-                        dataKey="diskUsed"
-                        stackId="a"
-                        background
-                        fill="var(--color-diskUsed)"
-                        cornerRadius={10}
-                    />
-
-                    <RadialBar
-                        dataKey="diskReserved"
-                        stackId="a"
-                        fill="var(--color-diskReserved)"
-                        background
-                        cornerRadius={10}
-                    />
-
-                    <PolarRadiusAxis
-                        tick={false}
-                        tickLine={false}
-                        axisLine={false}
-                    >
-                        <Label
-                            content={({ viewBox }) => {
-                                if (
-                                    viewBox &&
-                                    'cx' in viewBox &&
-                                    'cy' in viewBox
-                                ) {
-                                    return (
-                                        <text
-                                            x={viewBox.cx}
-                                            y={viewBox.cy}
-                                            textAnchor="middle"
-                                            dominantBaseline="middle"
-                                        >
-                                            <tspan
-                                                x={viewBox.cx}
-                                                y={viewBox.cy}
-                                                className="fill-foreground text-4xl font-bold"
-                                            >
-                                                {(nodeResource.diskUsageAbsolut / nodeResource.diskUsageCapacity * 100).toFixed(1)}
-                                            </tspan>
-                                            <tspan
-                                                x={viewBox.cx}
-                                                y={(viewBox.cy || 0) + 24}
-                                                className="fill-muted-foreground"
-                                            >
-                                                %
-                                            </tspan>
-                                        </text>
-                                    );
-                                }
-                            }}
-                        />
-                    </PolarRadiusAxis>
-                </RadialBarChart>
-            </ChartContainer>
-        </CardContent>
-*/

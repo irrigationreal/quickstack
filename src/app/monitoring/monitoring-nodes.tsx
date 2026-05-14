@@ -232,7 +232,7 @@ export default function ResourcesNodes({
                       return (
                         <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
                           <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-3xl font-bold">
-                            {toPercent(clusterStats.diskUsageAbsolut + clusterStats.diskUsageReserved, clusterStats.diskCapacity).toFixed(0)}%
+                            {toPercent(clusterStats.diskUsageAbsolut, clusterStats.diskCapacity).toFixed(0)}%
                           </tspan>
                           <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 24} className="fill-muted-foreground">
                             Used
@@ -292,15 +292,19 @@ export default function ResourcesNodes({
                         const diskUsed = getDiskUsageAbsolut(node);
                         const diskReserved = getDiskUsageReserved(node);
                         const diskCapacity = getDiskUsageCapacity(node);
-                        const diskUsedAndReserved = diskUsed + diskReserved;
-                        const diskPercent = toPercent(diskUsedAndReserved, diskCapacity);
+                        const diskPercent = toPercent(diskUsed, diskCapacity);
                         return (
                           <>
                             <div className="flex justify-between text-xs text-muted-foreground">
                               <span>{diskPercent.toFixed(0)}%</span>
-                              <span>{KubeSizeConverter.convertBytesToReadableSize(diskUsedAndReserved)} / {KubeSizeConverter.convertBytesToReadableSize(diskCapacity)}</span>
+                              <span>{KubeSizeConverter.convertBytesToReadableSize(diskUsed)} / {KubeSizeConverter.convertBytesToReadableSize(diskCapacity)}</span>
                             </div>
                             <Progress value={diskPercent} className="h-2" />
+                            {diskReserved > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {KubeSizeConverter.convertBytesToReadableSize(diskReserved)} reserved for Longhorn scheduling
+                              </div>
+                            )}
                           </>
                         );
                       })()}
@@ -494,7 +498,7 @@ function NodeDetailsSheet({ node }: { node: NodeResourceModel }) {
                                 y={(viewBox.cy || 0) + 30}
                                 className="fill-muted-foreground"
                               >
-                                {(node.ramUsage / (1024 * 1024 * 1024)).toFixed(2)} / {KubeSizeConverter.convertBytesToReadableSize(node.ramCapacity)}
+                                {KubeSizeConverter.convertBytesToReadableSize(node.ramUsage)} / {KubeSizeConverter.convertBytesToReadableSize(node.ramCapacity)}
                               </tspan>
                             </text>
                           );

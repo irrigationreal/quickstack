@@ -36,9 +36,9 @@ function buildOptions(ctx: CliContext, plan: Awaited<ReturnType<typeof createPla
   };
 }
 
-export async function executeBuildStrategy(ctx: CliContext, appId: string, root: string, projectId?: string) {
+export async function executeBuildStrategy(ctx: CliContext, appId: string, root: string, projectId?: string, defaultStrategy = 'auto') {
   const image = optionValue('--image', ctx.commandArgs);
-  const explicitStrategy = (optionValue('--build-strategy', ctx.commandArgs) as any) || 'auto';
+  const explicitStrategy = (optionValue('--build-strategy', ctx.commandArgs) as any) || defaultStrategy;
   if (image && (explicitStrategy === 'auto' || explicitStrategy === 'existing-image')) {
     return { status: 'success', buildResult: normalizeExistingImage(image) };
   }

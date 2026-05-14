@@ -66,6 +66,7 @@ describe('quickstack lifecycle CLI contracts', () => {
       method: 'POST',
       body: expect.stringContaining('"projectId":"proj-1"'),
     }));
+    expect(buildMocks.executeBuildStrategy).toHaveBeenCalledWith(expect.anything(), 'app-1', root, 'proj-1', 'source-tar');
     expect(apiMocks.deployImage).toHaveBeenCalledWith('app-1', expect.objectContaining({ strategy: 'source-tar' }));
     log.mockRestore();
   });

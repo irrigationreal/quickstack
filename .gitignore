@@ -48,3 +48,4 @@ security-audit-results.tsv
 agent_ergonomics_audit/
 .autoresearch-*.md
 predict/
+dogfood-output/
