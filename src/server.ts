@@ -87,8 +87,8 @@ async function initializeNextJs() {
             handle(req, res, parsedUrl)
         });
 
-        socketIoServer.initialize(server);
         initializeWebsocket(server);
+        socketIoServer.initialize(server);
         server.listen(port, () => {
             console.log(
                 `> Server listening at http://localhost:${port} as ${dev ? 'development' : process.env.NODE_ENV

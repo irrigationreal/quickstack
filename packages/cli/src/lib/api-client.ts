@@ -280,9 +280,22 @@ export async function streamExec(appId: string, payload: { command?: string[]; t
   });
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      ws.on('message', data => controller.enqueue(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer)));
-      ws.on('close', () => controller.close());
-      ws.on('error', error => controller.error(error));
+      let closed = false;
+      const closeController = () => {
+        if (closed) return;
+        closed = true;
+        try { controller.close(); } catch { /* already closed */ }
+      };
+      const errorController = (error: unknown) => {
+        if (closed) return;
+        closed = true;
+        controller.error(error instanceof Error ? error : new Error(String(error)));
+      };
+      ws.on('message', data => {
+        if (!closed) controller.enqueue(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
+      });
+      ws.on('close', closeController);
+      ws.on('error', errorController);
     },
     cancel() {
       if (ws.readyState === WebSocket.OPEN) ws.close();
@@ -290,9 +303,21 @@ export async function streamExec(appId: string, payload: { command?: string[]; t
   });
 
   await new Promise<void>((resolve, reject) => {
-    ws.once('open', resolve);
-    ws.once('error', reject);
-    ws.once('unexpected-response', (_request, response) => reject(new Error(`QuickStack API ${response.statusCode}: ${response.statusMessage}`)));
+    let settled = false;
+    ws.once('open', () => {
+      settled = true;
+      resolve();
+    });
+    ws.once('error', error => {
+      if (settled) return;
+      settled = true;
+      reject(error instanceof Error ? error : new Error(String(error)));
+    });
+    ws.once('unexpected-response', (_request, response) => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`QuickStack API ${response.statusCode}: ${response.statusMessage}`));
+    });
   });
 
   if (input) {
