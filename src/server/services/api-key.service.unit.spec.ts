@@ -3,6 +3,7 @@ const dbMocks = vi.hoisted(() => ({
     apiKeyFindMany: vi.fn(),
     apiKeyFindUnique: vi.fn(),
     apiKeyUpdate: vi.fn(),
+    appFindUnique: vi.fn(),
 }));
 
 const userGroupMocks = vi.hoisted(() => ({
@@ -17,6 +18,9 @@ vi.mock('@/server/adapter/db.client', () => ({
                 findMany: dbMocks.apiKeyFindMany,
                 findUnique: dbMocks.apiKeyFindUnique,
                 update: dbMocks.apiKeyUpdate,
+            },
+            app: {
+                findUnique: dbMocks.appFindUnique,
             },
         },
     },
@@ -105,13 +109,50 @@ describe('api-key.service', () => {
         });
     });
 
-    it('rejects revoked keys', async () => {
+    it('rejects revoked keys with the revocation timestamp', async () => {
         const plaintextKey = 'qstk_abcdef123456_secret';
         dbMocks.apiKeyFindUnique.mockResolvedValue({
             keyHash: apiKeyService.hashForTest(plaintextKey),
-            revokedAt: new Date(),
+            revokedAt: new Date('2026-05-14T00:01:00Z'),
         });
 
-        await expect(apiKeyService.authenticateAuthorizationHeader(`Bearer ${plaintextKey}`)).rejects.toThrow('revoked');
+        await expect(apiKeyService.authenticateAuthorizationHeader(`Bearer ${plaintextKey}`)).rejects.toThrow('revoked at 2026-05-14T00:01:00.000Z');
+    });
+
+    it('rejects token scopes wider than the issuing token boundary', async () => {
+        expect(await apiKeyService.canIssueScope({ appIdsJson: null, projectIdsJson: null } as never, 'actor')).toBe(true);
+        expect(await apiKeyService.canIssueScope({ appIdsJson: JSON.stringify(['app-1']), projectIdsJson: null } as never, 'actor')).toBe(false);
+        expect(await apiKeyService.canIssueScope({ appIdsJson: null, projectIdsJson: JSON.stringify(['proj-1']) } as never, { project: 'proj-2' })).toBe(false);
+        dbMocks.appFindUnique.mockResolvedValue({ projectId: 'proj-1' });
+        expect(await apiKeyService.canIssueScope({ appIdsJson: null, projectIdsJson: JSON.stringify(['proj-1']) } as never, { app: 'app-1' })).toBe(true);
+    });
+
+    it('can expose inactive token context for diagnostics without updating last used', async () => {
+        const plaintextKey = 'qstk_abcdef123456_secret';
+        const keyHash = apiKeyService.hashForTest(plaintextKey);
+        dbMocks.apiKeyFindUnique.mockResolvedValue({
+            id: 'key-1',
+            userId: 'user-1',
+            name: 'Claude agent',
+            prefix: 'abcdef123456',
+            keyHash,
+            scopes: JSON.stringify(['apps:read']),
+            appIdsJson: null,
+            projectIdsJson: null,
+            lastUsedAt: null,
+            revokedAt: new Date('2026-05-14T00:01:00Z'),
+            expiresAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            user: {
+                id: 'user-1',
+                email: 'admin@example.com',
+            },
+        });
+
+        const authenticated = await apiKeyService.authenticateAuthorizationHeader(`Bearer ${plaintextKey}`, { allowInactive: true });
+
+        expect(authenticated.apiKey.revokedAt?.toISOString()).toBe('2026-05-14T00:01:00.000Z');
+        expect(dbMocks.apiKeyUpdate).not.toHaveBeenCalled();
     });
 });

@@ -2,7 +2,8 @@ import apiKeyService from "@/server/services/api-key.service";
 import appService from "@/server/services/app.service";
 import auditService from "@/server/services/audit.service";
 import dataAccess from "@/server/adapter/db.client";
-import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
+import storageStateService from "@/server/services/storage-state.service";
+import { assertSessionCanReadApp, assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
 import { appVolumeEditZodModel } from "@/shared/model/volume-edit.model";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { NextResponse } from "next/server";
@@ -21,24 +22,35 @@ const volumeRemoveZodModel = z.object({
     message: 'Volume id or containerMountPath is required.',
 });
 
-function unauthorized() {
-    return NextResponse.json({ status: 'error', message: 'Missing or invalid API key.' }, { status: 401 });
+const volumePatchZodModel = z.object({
+    id: z.string().min(1),
+    size: z.preprocess(value => typeof value === 'string' ? Number(value) : value, z.number().int().positive()),
+});
+
+function unauthorized(message = 'Missing or invalid API key.') {
+    return NextResponse.json({ status: 'error', message }, { status: 401 });
 }
 
 function forbidden(message = 'API key is not authorized to manage volumes for this app.') {
     return NextResponse.json({ status: 'error', message }, { status: 403 });
 }
 
-function mapVolume(volume: any) {
+function mapVolume(volume: any, attachedPods: string[] = []) {
     return {
         id: volume.id,
+        name: String(volume.containerMountPath ?? '').split('/').filter(Boolean).join('-') || volume.id,
         appId: volume.appId,
         containerMountPath: volume.containerMountPath,
+        mountPath: volume.containerMountPath,
         size: volume.size,
+        storageClass: volume.storageClassName,
         accessMode: volume.accessMode,
         storageClassName: volume.storageClassName,
         shareWithOtherApps: volume.shareWithOtherApps,
         sharedVolumeId: volume.sharedVolumeId,
+        attachedPods,
+        used: undefined,
+        free: undefined,
         createdAt: volume.createdAt,
         updatedAt: volume.updatedAt,
     };
@@ -76,6 +88,10 @@ async function authenticateAndAuthorize(request: Request, appId: string, scope: 
         return { response: forbidden() };
     }
 
+    if (scope === 'apps:read') {
+        try { assertSessionCanReadApp(authenticated.session, app.id); } catch { return { response: forbidden('API key user is not authorized to read this app.') }; }
+    }
+
     if (scope === 'apps:write') {
         try {
             assertSessionCanWriteApp(authenticated.session, app.id);
@@ -98,33 +114,35 @@ async function authenticateAndAuthorize(request: Request, appId: string, scope: 
     return { authenticated, app };
 }
 
-export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
         authorized = await authenticateAndAuthorize(request, appId, 'apps:read');
-    } catch {
-        return unauthorized();
+    } catch (error) {
+        return unauthorized(error instanceof Error ? error.message : undefined);
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
 
+    const storage = await storageStateService.getForApp(authorized.app.id);
     return NextResponse.json({
         status: 'success',
         appId: authorized.app.id,
         projectId: authorized.app.projectId,
-        volumes: authorized.app.appVolumes.map(mapVolume),
+        volumes: storage.volumes,
+        storage,
     });
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
         authorized = await authenticateAndAuthorize(request, appId, 'apps:write');
-    } catch {
-        return unauthorized();
+    } catch (error) {
+        return unauthorized(error instanceof Error ? error.message : undefined);
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
 
     const parsed = volumeAddZodModel.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
@@ -206,15 +224,49 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
         authorized = await authenticateAndAuthorize(request, appId, 'apps:write');
-    } catch {
-        return unauthorized();
+    } catch (error) {
+        return unauthorized(error instanceof Error ? error.message : undefined);
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
+
+    const parsed = volumePatchZodModel.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+        return NextResponse.json({ status: 'error', message: 'Invalid volume update payload.' }, { status: 400 });
+    }
+    const existingVolume = await appService.getVolumeById(parsed.data.id);
+    if (!existingVolume || existingVolume.appId !== authorized.app.id) {
+        return NextResponse.json({ status: 'error', message: 'Volume not found.' }, { status: 404 });
+    }
+    if (existingVolume.size > parsed.data.size) {
+        return NextResponse.json({ status: 'error', message: 'Volume size cannot be decreased' }, { status: 400 });
+    }
+    const volume = await appService.saveVolume({
+        id: existingVolume.id,
+        appId: existingVolume.appId,
+        containerMountPath: existingVolume.containerMountPath,
+        size: parsed.data.size,
+        accessMode: existingVolume.accessMode,
+        storageClassName: existingVolume.storageClassName,
+        shareWithOtherApps: existingVolume.shareWithOtherApps,
+        sharedVolumeId: existingVolume.sharedVolumeId,
+    });
+    return NextResponse.json({ status: 'success', appId: authorized.app.id, projectId: authorized.app.projectId, volume: mapVolume(volume) });
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
+    const { appId } = await params;
+    let authorized;
+    try {
+        authorized = await authenticateAndAuthorize(request, appId, 'apps:write');
+    } catch (error) {
+        return unauthorized(error instanceof Error ? error.message : undefined);
+    }
+    if (authorized.response) return authorized.response;
 
     const parsed = volumeRemoveZodModel.safeParse(await request.json().catch(() => Object.fromEntries(new URL(request.url).searchParams.entries())));
     if (!parsed.success) {

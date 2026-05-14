@@ -9,6 +9,7 @@ if (!(globalThis as any).AsyncLocalStorage) {
 
 const next = require('next') as typeof import('next').default
 import socketIoServer from './socket-io.server'
+import initializeWebsocket from './websocket.server'
 import quickStackService from './server/services/qs.service'
 import { CommandExecutorUtils } from './server/utils/command-executor.utils'
 import dataAccess from './server/adapter/db.client'
@@ -87,6 +88,7 @@ async function initializeNextJs() {
         });
 
         socketIoServer.initialize(server);
+        initializeWebsocket(server);
         server.listen(port, () => {
             console.log(
                 `> Server listening at http://localhost:${port} as ${dev ? 'development' : process.env.NODE_ENV

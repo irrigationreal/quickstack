@@ -2,6 +2,8 @@ import crypto from "crypto";
 import appService from "./app.service";
 import paramService, { ParamService } from "./param.service";
 import { HostnameDnsProviderUtils } from "@/shared/utils/domain-dns-provider.utils";
+import ingressService from "./ingress.service";
+import certificateService from "./certificate.service";
 
 function slugify(value: string) {
     const slug = value
@@ -45,6 +47,48 @@ class AgentDomainService {
         }
         const fallback = crypto.randomBytes(8).toString('hex');
         return `${slugify(prefix)}-${fallback}.${domainSuffix}`;
+    }
+
+    async list(appId: string) {
+        const app = await appService.getExtendedById(appId, false);
+        const domains = await Promise.all(app.appDomains.map(async (domain, index) => ({
+            id: domain.id,
+            hostname: domain.hostname,
+            port: domain.port,
+            useSsl: domain.useSsl,
+            isPrimary: index === 0,
+            certState: await certificateService.getDomainCertState(app.projectId, domain),
+        })));
+        return { app, domains };
+    }
+
+    async add(appId: string, input: { hostname: string; port?: number; useSsl?: boolean; redirectHttps?: boolean }) {
+        const app = await appService.getExtendedById(appId, false);
+        const hostname = new URL(input.hostname.includes('://') ? input.hostname : `https://${input.hostname}`).hostname;
+        const saved = await appService.saveDomain({
+            appId: app.id,
+            hostname,
+            port: input.port ?? app.appPorts[0]?.port ?? 80,
+            useSsl: input.useSsl ?? true,
+            redirectHttps: input.redirectHttps ?? true,
+        });
+        const updated = await appService.getExtendedById(app.id, false);
+        await ingressService.createOrUpdateIngressForApp(`domain-${saved.id}`, updated);
+        return (await this.list(app.id)).domains.find(domain => domain.id === saved.id)!;
+    }
+
+    async remove(appId: string, hostnameOrId: string) {
+        const app = await appService.getExtendedById(appId, false);
+        const domain = app.appDomains.find(item => item.id === hostnameOrId || item.hostname === hostnameOrId);
+        if (!domain) {
+            return null;
+        }
+        await appService.deleteDomainById(domain.id);
+        const updated = await appService.getExtendedById(app.id, false).catch(() => null);
+        if (updated) {
+            await ingressService.createOrUpdateIngressForApp(`domain-delete-${domain.id}`, updated);
+        }
+        return { id: domain.id, hostname: domain.hostname };
     }
 }
 

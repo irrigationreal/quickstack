@@ -57,6 +57,24 @@ export async function GET(request: Request) {
     }
 
     const requestUrl = new URL(request.url);
+    const id = requestUrl.searchParams.get('id');
+    if (id) {
+        const managedApp = await appService.getById(id).catch(() => null);
+        if (!managedApp) {
+            return NextResponse.json({ status: 'error', message: 'Managed Redis app not found.' }, { status: 404 });
+        }
+        if (!apiKeyService.isAllowedForApp(authenticated.apiKey, managedApp)) {
+            return forbidden();
+        }
+        try {
+            return NextResponse.json({ status: 'success', service: await quickStackManagedService.getManagedStatus('redis', id) });
+        } catch (error) {
+            if (error instanceof ServiceException) {
+                return NextResponse.json({ status: 'error', message: error.message }, { status: 400 });
+            }
+            throw error;
+        }
+    }
     const parsed = listRedisZodModel.safeParse({ projectId: requestUrl.searchParams.get('projectId') });
     if (!parsed.success) {
         return NextResponse.json({ status: 'error', message: 'projectId is required.' }, { status: 400 });
@@ -65,8 +83,17 @@ export async function GET(request: Request) {
         return forbidden();
     }
 
-    const redis = await quickStackManagedService.listRedis(parsed.data.projectId);
-    return NextResponse.json({ status: 'success', projectId: parsed.data.projectId, redis });
+    const services = await quickStackManagedService.listRedis(parsed.data.projectId);
+    const redis = services.map(service => ({
+        id: service.id,
+        name: service.name,
+        projectId: service.projectId,
+        hostname: service.connection.hostname,
+        port: service.connection.port,
+        createdAt: service.createdAt,
+        updatedAt: service.updatedAt,
+    }));
+    return NextResponse.json({ status: 'success', projectId: parsed.data.projectId, services, redis });
 }
 
 export async function POST(request: Request) {
@@ -142,6 +169,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             status: 'success',
+            service: quickStackManagedService.normalizeManagedService(created.redisApp, 'redis', created.databaseInfo),
             redisAppId: created.redisApp.id,
             projectId: created.redisApp.projectId,
             name: created.redisApp.name,

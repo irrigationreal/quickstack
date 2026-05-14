@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { CliContext, optionValue } from '../lib/args';
-import { apiConfig, getMe, listApps } from '../lib/api-client';
+import { apiConfig, getApp, getMe, listApps } from '../lib/api-client';
 import { emit, printError } from '../lib/output';
 import { readProjectState } from '../lib/state';
 import type { AgentAppSummary } from '../../../../src/shared/model/agent-app-list.model';
@@ -69,10 +69,11 @@ export async function apps(ctx: CliContext) {
     if (!appName) printError(ctx, 'Usage: quickstack apps open <app> [--project <id>] [--json]');
     const app = await resolveApp(appName, project?.id);
     const config = await apiConfig();
-    const url = `${config.url}/apps/${app.id}`;
     if (!config.url) printError(ctx, 'QUICKSTACK_URL or ~/.quickstack/config.json url is required to open an app URL.');
+    const summary = await getApp(app.id).catch(() => ({ app: null }));
+    const url = summary.app?.primaryUrl || `${config.url}/apps/${app.id}`;
     const opened = openUrl(url);
-    emit(ctx, 'success', { message: opened ? `Opened ${app.name}.` : `App URL: ${url}`, app, url, opened });
+    emit(ctx, 'success', { message: opened ? `Opened ${app.name}.` : `App URL: ${url}`, app: summary.app || app, url, opened });
     return;
   }
 

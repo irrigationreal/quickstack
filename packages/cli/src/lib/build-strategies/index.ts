@@ -16,6 +16,12 @@ export function resolveBuildStrategy(input: {
   if (requested === 'remote-builder' && !input.capabilities.remoteBuilder) {
     throw new Error('remote builder is not configured on this server.');
   }
+  if (requested === 'local-docker' && input.capabilities.registry?.pushCredentials === false) {
+    if (input.userFlag === 'local-docker') throw new Error('local-docker requires registry push credentials reachable by the CLI. Use source-tar or existing-image instead.');
+    const fallback = input.recommendations.find(item => item.strategy !== 'local-docker' && input.capabilities.strategies.includes(item.strategy));
+    if (fallback) return { strategy: fallback.strategy, reason: 'local-docker unavailable because registry push credentials are not advertised; using fallback.', cacheHit: false };
+    throw new Error('local-docker requires registry push credentials reachable by the CLI. Use source-tar or existing-image instead.');
+  }
   if (!input.capabilities.strategies.includes(requested)) {
     const fallback = input.recommendations.find(item => input.capabilities.strategies.includes(item.strategy));
     if (!fallback) throw new Error(`No supported build strategy is available for ${requested}.`);

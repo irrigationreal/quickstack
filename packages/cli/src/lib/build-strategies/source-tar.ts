@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { uploadBuildTar } from '../api-client';
+import { getCachedBuildResult, uploadBuildTar } from '../api-client';
 
 async function sha256File(file: string) {
   const hash = crypto.createHash('sha256');
@@ -22,6 +22,10 @@ export async function runSourceTar(appId: string, contextPath: string, metadata:
     const tar = spawnSync('tar', ['-C', contextPath, '-cf', tarPath, '.'], { stdio: 'inherit' });
     if (tar.status !== 0) throw new Error('tar packaging failed.');
     const fileHash = await sha256File(tarPath);
+    const cached = await getCachedBuildResult(appId, fileHash.contentHash);
+    if (cached.status === 'hit' && cached.buildResult) {
+      return { status: 'success', buildResult: cached.buildResult };
+    }
     return uploadBuildTar(appId, tarPath, { ...metadata, ...fileHash, artifactType: 'source-tar' });
   } finally {
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => undefined);

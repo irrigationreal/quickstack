@@ -368,6 +368,20 @@ class DeploymentService {
         return k3s.apps.replaceNamespacedDeployment(appId, projectId, existingDeployment);
     }
 
+    async rollingRestart(projectId: string, appId: string, deploymentId?: string, restartedAt = new Date().toISOString()) {
+        const existingDeployment = await this.getDeployment(projectId, appId);
+        if (!existingDeployment?.spec?.template) {
+            throw new ServiceException("This app has not been deployed yet. Please deploy it first.");
+        }
+        existingDeployment.spec.template.metadata ??= {};
+        existingDeployment.spec.template.metadata.annotations = {
+            ...(existingDeployment.spec.template.metadata.annotations ?? {}),
+            ...(deploymentId ? { [Constants.QS_ANNOTATION_DEPLOYMENT_ID]: deploymentId } : {}),
+            'kubectl.kubernetes.io/restartedAt': restartedAt,
+        };
+        return k3s.apps.replaceNamespacedDeployment(appId, projectId, existingDeployment);
+    }
+
     async setReplicasToZeroAndWaitForShutdown(projectId: string, appId: string) {
         await this.setReplicasForDeployment(projectId, appId, 0);
         const podNames = await podService.getPodsForApp(projectId, appId);

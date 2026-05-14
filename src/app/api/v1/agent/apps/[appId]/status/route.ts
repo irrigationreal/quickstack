@@ -4,6 +4,7 @@ import deploymentService from "@/server/services/deployment.service";
 import auditService from "@/server/services/audit.service";
 import dataAccess from "@/server/adapter/db.client";
 import podService from "@/server/services/pod.service";
+import { assertSessionCanReadApp } from "@/server/utils/action-wrapper.utils";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
         });
         return forbidden();
     }
+    try { assertSessionCanReadApp(authenticated.session, app.id); } catch { return forbidden('API key user is not authorized to read this app.'); }
 
     const [deployment, pods, deploymentRecords, quickDeployBuilds] = await Promise.all([
         deploymentService.getDeployment(app.projectId, app.id).catch(() => undefined),

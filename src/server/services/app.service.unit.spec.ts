@@ -108,6 +108,28 @@ describe('app.service', () => {
         expect(vi.mocked(dataAccess.client as any).appPublicEndpoint.create).not.toHaveBeenCalled();
     });
 
+    it('marks restart release records failed when the Kubernetes restart patch fails', async () => {
+        const app = createApp({ containerImageSource: 'registry.example/app:v1' });
+        vi.spyOn(appService, 'getExtendedById').mockResolvedValue(app);
+        vi.mocked(dataAccess.client as any).deploymentRecord = {
+            create: vi.fn().mockResolvedValue({ deploymentId: 'restart-1' }),
+            update: vi.fn().mockResolvedValue({ deploymentId: 'restart-1', status: 'FAILED' }),
+        };
+        vi.mocked(deploymentService as any).rollingRestart = vi.fn().mockRejectedValue(new ServiceException('not deployed'));
+
+        await expect(appService.restart('demo-app', { actorType: 'API_KEY', actorEmail: 'agent@example.com' })).rejects.toThrow('not deployed');
+
+        expect(vi.mocked(dataAccess.client as any).deploymentRecord.update).toHaveBeenCalledWith({
+            where: { deploymentId: expect.any(String) },
+            data: { status: 'FAILED' },
+        });
+        expect(auditService.recordBestEffort).toHaveBeenCalledWith(expect.objectContaining({
+            action: 'APP_RESTART_REQUESTED',
+            outcome: 'FAILED',
+            message: 'not deployed',
+        }));
+    });
+
     it('persists App Node Ports when saving an extended App', async () => {
         vi.spyOn(appService, 'save').mockResolvedValue({} as never);
         vi.spyOn(appService, 'saveDomain').mockResolvedValue({} as never);

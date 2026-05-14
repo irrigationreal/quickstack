@@ -30,6 +30,8 @@ export const quickDeployUploadMetadataZodModel = z.object({
     contentHash: z.string().trim().regex(/^sha256:[a-f0-9]{64}$/i, 'contentHash must be a sha256 digest.'),
     uploadBytes: z.number().int().positive().optional(),
     dockerfilePath: z.string().trim().min(1).max(500).default('./Dockerfile'),
+    serviceRoot: z.string().trim().min(1).max(500).default('.'),
+    buildSecrets: z.array(z.string().trim().min(1).max(500)).optional(),
 });
 
 export type QuickDeployUploadMetadataModel = z.infer<typeof quickDeployUploadMetadataZodModel>;

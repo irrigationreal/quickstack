@@ -145,6 +145,28 @@ class QuickDeployUploadService {
         return DEFAULT_MAX_UPLOAD_BYTES;
     }
 
+    async findReusableBuildResult(input: { app: { id: string; projectId: string }; contentHash: string }) {
+        const build = await dataAccess.client.quickDeployBuild.findFirst({
+            where: {
+                appId: input.app.id,
+                projectId: input.app.projectId,
+                contentHash: input.contentHash,
+                status: 'SUCCEEDED',
+                imageReference: { not: null },
+            },
+            orderBy: { updatedAt: 'desc' },
+        });
+        if (!build?.imageReference) return undefined;
+        return this.normalizeBuildResult({
+            imageReference: build.imageReference,
+            strategy: 'source-tar',
+            sourceProvenance: build.contentHash,
+            cacheHit: true,
+            sizeBytes: build.uploadBytes,
+            buildId: build.id,
+        });
+    }
+
     async acceptUpload(input: {
         app: { id: string; projectId: string; name: string };
         metadata: QuickDeployUploadMetadataModel;

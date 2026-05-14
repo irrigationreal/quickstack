@@ -20,7 +20,7 @@ export function envelope(command: string, outcome: Outcome, result: Record<strin
   return {
     schemaVersion: 1,
     command,
-    outcome,
+    outcome: outcome === 'success' ? 'ok' : outcome,
     questions: [],
     warnings: [],
     errors: [],
@@ -31,7 +31,12 @@ export function envelope(command: string, outcome: Outcome, result: Record<strin
 export function printHuman(body: any) {
   if (body.message) console.log(body.message);
   if (body.warnings?.length) body.warnings.forEach((warning: string) => console.warn(`warning: ${warning}`));
-  if (body.errors?.length) body.errors.forEach((error: any) => console.error(error.message || error));
+  if (body.errors?.length) body.errors.forEach((error: any) => {
+    console.error(error.message || error);
+    if (error.scope) console.error(`scope: ${typeof error.scope === 'string' ? error.scope : JSON.stringify(error.scope)}`);
+    if (error.ownership) console.error(`ownership: ${typeof error.ownership === 'string' ? error.ownership : JSON.stringify(error.ownership)}`);
+    if (error.remediation) console.error(`remediation: ${error.remediation}`);
+  });
   if (body.questions?.length) {
     body.questions.forEach((question: Question) => {
       console.log(`${question.id}: ${question.message}`);
@@ -58,7 +63,8 @@ export function printQuestion(ctx: OutputContext, text: string, id: string, opti
   return emit(ctx, 'question', { message: text, questions: [{ id, message: text, options }] });
 }
 
-export function printError(ctx: OutputContext, message: string, code = 1): never {
-  emit(ctx, 'error', { errors: [{ message }] });
-  process.exit(code);
+export function printError(ctx: OutputContext, error: string | { message: string; code?: number; scope?: unknown; ownership?: unknown; remediation?: string }, code = 1): never {
+  const payload = typeof error === 'string' ? { message: error, code } : error;
+  emit(ctx, 'error', { errors: [{ message: payload.message, scope: payload.scope, ownership: payload.ownership, remediation: payload.remediation }] });
+  process.exit(payload.code ?? code);
 }

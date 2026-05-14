@@ -1,6 +1,7 @@
 import appService from "@/server/services/app.service";
 import apiKeyService from "@/server/services/api-key.service";
 import auditService from "@/server/services/audit.service";
+import dataAccess from "@/server/adapter/db.client";
 import buildWatchService from "@/server/services/standalone-services/build-watch.service";
 import deploymentEventWatchService from "@/server/services/standalone-services/deployment-event-watch.service";
 import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
@@ -83,17 +84,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     const parsedBody = await request.json().catch(() => null);
     const parsedBuildResult = BuildResultZodModel.safeParse(parsedBody?.buildResult);
     if (parsedBuildResult.success) {
-        await appService.save({
-            id: app.id,
-            containerImageSource: parsedBuildResult.data.imageReference,
-            sourceType: 'CONTAINER',
-        }, false);
+        if (parsedBuildResult.data.strategy === 'source-tar' && !parsedBuildResult.data.cacheHit) {
+            await appService.save({
+                id: app.id,
+                sourceType: 'QUICKDEPLOY_UPLOAD',
+                containerImageSource: null,
+            }, false);
+        } else {
+            await appService.save({
+                id: app.id,
+                containerImageSource: parsedBuildResult.data.imageReference,
+                sourceType: 'CONTAINER',
+            }, false);
+        }
     }
 
     buildWatchService.startWatch();
     deploymentEventWatchService.startWatch();
 
     const deployment = await appService.buildAndDeploy(app.id, true, authenticated.auditActor);
+
+    if (parsedBuildResult.success) {
+        await dataAccess.client.deploymentRecord.update({
+            where: { deploymentId: deployment.deploymentId },
+            data: {
+                buildStrategy: parsedBuildResult.data.strategy,
+                imageReference: parsedBuildResult.data.imageReference,
+                imageJson: JSON.stringify(parsedBuildResult.data.image),
+                sourceProvenance: parsedBuildResult.data.sourceProvenance,
+                buildId: parsedBuildResult.data.buildId,
+                cacheHit: parsedBuildResult.data.cacheHit,
+            } as any,
+        });
+    }
 
     return NextResponse.json({
         status: 'success',

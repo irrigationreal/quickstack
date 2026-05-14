@@ -4,11 +4,60 @@ import auditService, { AuditActor } from "./audit.service";
 import { AppTemplateUtils } from "../utils/app-template.utils";
 import { getPostgresAppTemplate } from "@/shared/templates/databases/postgres.template";
 import { getRedisAppTemplate } from "@/shared/templates/databases/redis.template";
+import { getMysqlAppTemplate } from "@/shared/templates/databases/mysql.template";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { Prisma } from "@prisma/client";
 import dataAccess from "../adapter/db.client";
+import type { ManagedServiceFamily } from "@/shared/model/agent-managed-service.model";
+import { defaultManagedSecretName, managedAppTypeForFamily, managedServiceSecretRefs } from "./managed-service.utils";
+
+function iso(value: unknown) {
+    return value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : undefined;
+}
 
 class QuickStackManagedService {
+    normalizeManagedService(app: any, family: ManagedServiceFamily, databaseInfo: any) {
+        return {
+            id: app.id,
+            family,
+            name: app.name,
+            projectId: app.projectId,
+            status: app.replicas === 0 ? 'degraded' : 'healthy',
+            connection: {
+                hostname: databaseInfo.hostname,
+                port: databaseInfo.port,
+                databaseName: databaseInfo.databaseName || undefined,
+                secretRefs: managedServiceSecretRefs(family),
+                proxyHint: `quickstack proxy ${databaseInfo.port}:${databaseInfo.port} ${databaseInfo.hostname} <app>`,
+            },
+            createdAt: iso(app.createdAt),
+            updatedAt: iso(app.updatedAt),
+        };
+    }
+
+    private async listManagedFamily(projectId: string, family: ManagedServiceFamily) {
+        const rows = await dataAccess.client.app.findMany({
+            where: {
+                projectId,
+                appType: managedAppTypeForFamily(family),
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+        });
+        return Promise.all(rows.map(async row => {
+            const app = await appService.getExtendedById(row.id, false);
+            return this.normalizeManagedService(app, family, AppTemplateUtils.getDatabaseModelFromApp(app));
+        }));
+    }
+
+    async getManagedStatus(family: ManagedServiceFamily, appId: string) {
+        const app = await appService.getExtendedById(appId, false);
+        if (app.appType !== managedAppTypeForFamily(family)) {
+            throw new ServiceException(`Managed resource is not a ${family} app.`);
+        }
+        return this.normalizeManagedService(app, family, AppTemplateUtils.getDatabaseModelFromApp(app));
+    }
+
     async createRedis(input: {
         projectId: string;
         name?: string;
@@ -54,36 +103,7 @@ class QuickStackManagedService {
     }
 
     async listRedis(projectId: string) {
-        const rows = await dataAccess.client.app.findMany({
-            where: {
-                projectId,
-                appType: 'REDIS',
-            },
-            orderBy: { createdAt: 'desc' },
-            select: {
-                id: true,
-                name: true,
-                projectId: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-
-        const resources = [];
-        for (const row of rows) {
-            const app = await appService.getExtendedById(row.id, false);
-            const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(app);
-            resources.push({
-                id: row.id,
-                name: row.name,
-                projectId: row.projectId,
-                hostname: databaseInfo.hostname,
-                port: databaseInfo.port,
-                createdAt: row.createdAt,
-                updatedAt: row.updatedAt,
-            });
-        }
-        return resources;
+        return this.listManagedFamily(projectId, 'redis');
     }
 
     async destroyRedis(input: {
@@ -129,7 +149,7 @@ class QuickStackManagedService {
             throw new ServiceException('Managed Redis can only be attached to apps in the same project.');
         }
         const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(redisApp);
-        const secretName = input.secretName || 'REDIS_URL';
+        const secretName = input.secretName || defaultManagedSecretName('redis');
         await appSecretEnvService.upsertMany({
             app,
             secrets: [{ name: secretName, value: databaseInfo.internalConnectionUrl }],
@@ -212,38 +232,7 @@ class QuickStackManagedService {
     }
 
     async listPostgres(projectId: string) {
-        const rows = await dataAccess.client.app.findMany({
-            where: {
-                projectId,
-                appType: 'POSTGRES',
-            },
-            orderBy: { createdAt: 'desc' },
-            select: {
-                id: true,
-                name: true,
-                projectId: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-
-        const databases = [];
-        for (const row of rows) {
-            const app = await appService.getExtendedById(row.id, false);
-            const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(app);
-            databases.push({
-                id: row.id,
-                name: row.name,
-                projectId: row.projectId,
-                databaseName: databaseInfo.databaseName,
-                username: databaseInfo.username,
-                hostname: databaseInfo.hostname,
-                port: databaseInfo.port,
-                createdAt: row.createdAt,
-                updatedAt: row.updatedAt,
-            });
-        }
-        return databases;
+        return this.listManagedFamily(projectId, 'postgres');
     }
 
     async destroyPostgres(input: {
@@ -272,6 +261,118 @@ class QuickStackManagedService {
         };
     }
 
+    async createMysql(input: {
+        projectId: string;
+        name?: string;
+        databaseName?: string;
+        username?: string;
+        actor: AuditActor;
+    }) {
+        const dbPassword = AppTemplateUtils.generateStrongPasswort(35);
+        const rootPassword = AppTemplateUtils.generateStrongPasswort(35);
+        const template = getMysqlAppTemplate({
+            appName: input.name || 'MySQL',
+            dbName: input.databaseName || 'mysqldb',
+            dbUsername: input.username || 'mysqluser',
+            dbPassword,
+            rootPassword,
+        });
+        const mappedApp = AppTemplateUtils.mapTemplateInputValuesToApp(template, template.inputSettings);
+
+        const appId = await dataAccess.client.$transaction(async (tx: Prisma.TransactionClient) => {
+            const created = await appService.save({
+                ...mappedApp,
+                name: input.name || mappedApp.name,
+                projectId: input.projectId,
+            }, false, tx);
+            for (const volume of template.appVolumes) {
+                await appService.saveVolume({ ...volume, appId: created.id }, tx);
+            }
+            for (const port of template.appPorts) {
+                await appService.savePort({ ...port, appId: created.id }, tx);
+            }
+            return created.id;
+        });
+
+        const mysqlApp = await appService.getExtendedById(appId, false);
+        const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(mysqlApp);
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_MYSQL_CREATED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: mysqlApp.id,
+            projectId: mysqlApp.projectId,
+            appId: mysqlApp.id,
+            appName: mysqlApp.name,
+        });
+        return { mysqlApp, databaseInfo };
+    }
+
+    async listMysql(projectId: string) {
+        return this.listManagedFamily(projectId, 'mysql');
+    }
+
+    async destroyMysql(input: { mysqlAppId: string; actor: AuditActor }) {
+        const mysqlApp = await appService.getById(input.mysqlAppId);
+        if (mysqlApp.appType !== 'MYSQL') {
+            throw new ServiceException('Managed resource is not a MySQL app.');
+        }
+        await appService.deleteById(mysqlApp.id);
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_MYSQL_DESTROYED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: mysqlApp.id,
+            projectId: mysqlApp.projectId,
+            appId: mysqlApp.id,
+            appName: mysqlApp.name,
+        });
+        return { mysqlAppId: mysqlApp.id, projectId: mysqlApp.projectId, name: mysqlApp.name };
+    }
+
+    async attachMysql(input: { mysqlAppId: string; appId: string; secretName?: string; actor: AuditActor }) {
+        const [mysqlApp, app] = await Promise.all([
+            appService.getExtendedById(input.mysqlAppId, false),
+            appService.getById(input.appId),
+        ]);
+        if (mysqlApp.appType !== 'MYSQL') {
+            throw new ServiceException('Managed resource is not a MySQL app.');
+        }
+        if (mysqlApp.projectId !== app.projectId) {
+            throw new ServiceException('Managed MySQL can only be attached to apps in the same project.');
+        }
+        const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(mysqlApp);
+        const secretName = input.secretName || defaultManagedSecretName('mysql');
+        await appSecretEnvService.upsertMany({
+            app,
+            secrets: [{ name: secretName, value: databaseInfo.internalConnectionUrl }],
+            actor: input.actor,
+        });
+        await auditService.recordBestEffort({
+            ...input.actor,
+            action: 'MANAGED_MYSQL_ATTACHED',
+            outcome: 'SUCCESS',
+            targetType: 'APP',
+            targetId: input.appId,
+            projectId: app.projectId,
+            appId: app.id,
+            appName: app.name,
+            metadata: { mysqlAppId: mysqlApp.id, secretName },
+        });
+        return {
+            appId: app.id,
+            mysqlAppId: mysqlApp.id,
+            secretName,
+            mysql: {
+                databaseName: databaseInfo.databaseName,
+                hostname: databaseInfo.hostname,
+                port: databaseInfo.port,
+            },
+        };
+    }
+
     async attachPostgres(input: {
         databaseAppId: string;
         appId: string;
@@ -289,7 +390,7 @@ class QuickStackManagedService {
             throw new ServiceException('Managed Postgres can only be attached to apps in the same project.');
         }
         const databaseInfo = AppTemplateUtils.getDatabaseModelFromApp(databaseApp);
-        const secretName = input.secretName || 'DATABASE_URL';
+        const secretName = input.secretName || defaultManagedSecretName('postgres');
         await appSecretEnvService.upsertMany({
             app,
             secrets: [{ name: secretName, value: databaseInfo.internalConnectionUrl }],

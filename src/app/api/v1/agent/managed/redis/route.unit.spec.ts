@@ -13,6 +13,8 @@ const managedMocks = vi.hoisted(() => ({
     attachRedis: vi.fn(),
     listRedis: vi.fn(),
     destroyRedis: vi.fn(),
+    getManagedStatus: vi.fn(),
+    normalizeManagedService: vi.fn(),
 }));
 const authMocks = vi.hoisted(() => ({ assertSessionCanWriteApp: vi.fn() }));
 const roleMocks = vi.hoisted(() => ({ sessionCanCreateNewAppsForProject: vi.fn() }));
@@ -55,8 +57,10 @@ describe('agent managed redis route', () => {
             databaseInfo: { hostname: 'svc-redis-1', port: 6379, internalConnectionUrl: 'redis://redacted' },
         });
         managedMocks.attachRedis.mockResolvedValue({ appId: 'app-1', redisAppId: 'redis-1', secretName: 'REDIS_URL', redis: { hostname: 'svc-redis-1', port: 6379 } });
-        managedMocks.listRedis.mockResolvedValue([{ id: 'redis-1', projectId: 'proj-1', name: 'redis-main', hostname: 'svc-redis-1', port: 6379 }]);
+        managedMocks.listRedis.mockResolvedValue([{ id: 'redis-1', family: 'redis', projectId: 'proj-1', name: 'redis-main', status: 'healthy', connection: { hostname: 'svc-redis-1', port: 6379 } }]);
         managedMocks.destroyRedis.mockResolvedValue({ redisAppId: 'redis-1', projectId: 'proj-1', name: 'redis-main' });
+        managedMocks.getManagedStatus.mockResolvedValue({ id: 'redis-1', family: 'redis', projectId: 'proj-1', name: 'redis-main', status: 'healthy', connection: { hostname: 'svc-redis-1', port: 6379 } });
+        managedMocks.normalizeManagedService.mockReturnValue({ id: 'redis-1', family: 'redis', projectId: 'proj-1', name: 'redis-main', status: 'healthy', connection: { hostname: 'svc-redis-1', port: 6379 } });
     });
 
     it('creates and deploys a managed Redis app before returning sanitized connection metadata', async () => {
@@ -79,6 +83,26 @@ describe('agent managed redis route', () => {
         expect(apiKeyMocks.hasScope).toHaveBeenCalledWith(authenticated.apiKey, 'apps:read');
         expect(managedMocks.listRedis).toHaveBeenCalledWith('proj-1');
         expect(json.redis[0]).toEqual(expect.objectContaining({ id: 'redis-1', hostname: 'svc-redis-1', port: 6379 }));
+    });
+
+    it('loads and authorizes the managed app before returning status by id', async () => {
+        const response = await GET(request('GET', undefined, '?id=redis-1'));
+        const json = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(appMocks.getById).toHaveBeenCalledWith('redis-1');
+        expect(apiKeyMocks.isAllowedForApp).toHaveBeenCalledWith(authenticated.apiKey, redisApp);
+        expect(managedMocks.getManagedStatus).toHaveBeenCalledWith('redis', 'redis-1');
+        expect(json.service.connection).toEqual({ hostname: 'svc-redis-1', port: 6379 });
+    });
+
+    it('rejects status by id before exposing connection metadata when the key cannot access the app', async () => {
+        apiKeyMocks.isAllowedForApp.mockReturnValue(false);
+
+        const response = await GET(request('GET', undefined, '?id=redis-1'));
+
+        expect(response.status).toBe(403);
+        expect(managedMocks.getManagedStatus).not.toHaveBeenCalled();
     });
 
     it('destroys a managed Redis app through the cleanup path', async () => {

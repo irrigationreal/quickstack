@@ -43,7 +43,7 @@ kube-config.config_old
 kube-config.config_restricted
 internal
 dist
-storage/
+/storage/
 security-audit-results.tsv
 agent_ergonomics_audit/
 .autoresearch-*.md

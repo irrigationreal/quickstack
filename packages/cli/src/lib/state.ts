@@ -49,6 +49,26 @@ async function readFirstExisting(root: string, relative: string) {
   return readJson(path.join(root, '.quickdeploy', relative));
 }
 
+export async function findProjectRoot(start: string) {
+  let current = path.resolve(start);
+  try {
+    const stat = await fs.stat(current);
+    if (stat.isFile()) current = path.dirname(current);
+  } catch {
+    // Keep the resolved path; callers may be creating state for a new directory.
+  }
+  while (true) {
+    const quickstack = await readJson(path.join(current, '.quickstack', 'index.json'));
+    const quickdeploy = await readJson(path.join(current, '.quickdeploy', 'index.json'));
+    const hasQuickstackDir = await fs.stat(path.join(current, '.quickstack')).then(stat => stat.isDirectory()).catch(() => false);
+    const hasQuickdeployDir = await fs.stat(path.join(current, '.quickdeploy')).then(stat => stat.isDirectory()).catch(() => false);
+    if (quickstack || quickdeploy || hasQuickstackDir || hasQuickdeployDir) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(start);
+    current = parent;
+  }
+}
+
 export async function readProjectState(root: string): Promise<LocalState> {
   const index = await readFirstExisting(root, 'index.json');
   const apps: any[] = [];

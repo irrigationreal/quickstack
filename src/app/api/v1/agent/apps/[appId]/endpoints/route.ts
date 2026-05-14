@@ -2,7 +2,7 @@ import apiKeyService from "@/server/services/api-key.service";
 import appService from "@/server/services/app.service";
 import auditService from "@/server/services/audit.service";
 import publicEndpointService from "@/server/services/public-endpoint.service";
-import { assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
+import { assertSessionCanReadApp, assertSessionCanWriteApp } from "@/server/utils/action-wrapper.utils";
 import { parseSourceCidrsText, publicEndpointEditZodModel } from "@/shared/model/public-endpoint.model";
 import { ServiceException } from "@/shared/model/service.exception.model";
 import { NextResponse } from "next/server";
@@ -27,18 +27,22 @@ function unauthorized() {
     return NextResponse.json({ status: 'error', message: 'Missing or invalid API key.' }, { status: 401 });
 }
 
-function forbidden(message = 'API key is not authorized to manage public endpoints for this app.') {
-    return NextResponse.json({ status: 'error', message }, { status: 403 });
+function forbidden(message = 'API key is not authorized to manage public endpoints for this app.', details: Record<string, unknown> = {}) {
+    return NextResponse.json({ status: 'error', message, ...details }, { status: 403 });
 }
 
-function mapEndpoint(endpoint: any) {
+function mapEndpoint(endpoint: any, app?: any) {
+    const attachedDomain = app?.appDomains?.find((domain: any) => domain.port === endpoint.targetPort);
     return {
         id: endpoint.id,
         name: endpoint.name,
         appId: endpoint.appId,
+        port: endpoint.targetPort,
+        visibility: 'public',
+        attachedDomainId: attachedDomain?.id,
         publicIp: endpoint.publicIp,
         publicPort: endpoint.publicPort,
-        protocol: endpoint.protocol,
+        protocol: String(endpoint.protocol ?? 'TCP').toLowerCase(),
         targetPort: endpoint.targetPort,
         sourceCidrs: endpoint.sourceCidrsJson ? JSON.parse(endpoint.sourceCidrsJson) : [],
         proxyProtocol: endpoint.proxyProtocol,
@@ -68,6 +72,7 @@ async function authenticateAndAuthorize(request: Request, appId: string, scope: 
     }
 
     if (!apiKeyService.isAllowedForApp(authenticated.apiKey, app)) {
+        const message = apiKeyService.appScopeDenialMessage(app);
         await auditService.recordBestEffort({
             ...authenticated.auditActor,
             action: 'AGENT_PUBLIC_ENDPOINT_REQUESTED',
@@ -77,9 +82,13 @@ async function authenticateAndAuthorize(request: Request, appId: string, scope: 
             projectId: app.projectId,
             appId: app.id,
             appName: app.name,
-            message: 'API key allowlist does not include this app.',
+            message,
         });
-        return { response: forbidden() };
+        return { response: forbidden(message, apiKeyService.appScopeDenial(authenticated.apiKey, app)) };
+    }
+
+    if (scope === 'apps:read') {
+        try { assertSessionCanReadApp(authenticated.session, app.id); } catch { return { response: forbidden('API key user is not authorized to read this app.') }; }
     }
 
     if (scope === 'apps:write') {
@@ -104,7 +113,7 @@ async function authenticateAndAuthorize(request: Request, appId: string, scope: 
     return { authenticated, app };
 }
 
-export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
@@ -112,17 +121,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
     } catch {
         return unauthorized();
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
 
     return NextResponse.json({
         status: 'success',
         appId: authorized.app.id,
         projectId: authorized.app.projectId,
-        endpoints: authorized.app.appPublicEndpoints.map(mapEndpoint),
+        endpoints: authorized.app.appPublicEndpoints.map(endpoint => mapEndpoint(endpoint, authorized.app)),
     });
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
@@ -130,7 +139,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     } catch {
         return unauthorized();
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
 
     const parsed = endpointReserveZodModel.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
@@ -175,7 +184,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
             status: 'success',
             appId: authorized.app.id,
             projectId: authorized.app.projectId,
-            endpoint: mapEndpoint(endpoint),
+            endpoint: mapEndpoint(endpoint, authorized.app),
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Public endpoint reservation failed.';
@@ -198,7 +207,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
     }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ appId: string }> }): Promise<Response> {
     const { appId } = await params;
     let authorized;
     try {
@@ -206,7 +215,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
     } catch {
         return unauthorized();
     }
-    if ('response' in authorized) return authorized.response;
+    if (authorized.response) return authorized.response;
 
     const parsed = endpointReleaseZodModel.safeParse(await request.json().catch(() => Object.fromEntries(new URL(request.url).searchParams.entries())));
     if (!parsed.success) {
@@ -242,6 +251,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
         status: 'success',
         appId: authorized.app.id,
         projectId: authorized.app.projectId,
-        released: mapEndpoint(endpoint),
+        released: mapEndpoint(endpoint, authorized.app),
     });
 }

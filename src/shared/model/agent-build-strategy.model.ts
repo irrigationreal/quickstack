@@ -29,8 +29,8 @@ export const BuildCapabilitiesZodModel = z.object({
 });
 
 export const BuildCreateRequestZodModel = z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("local-docker-finalize"), imageReference: z.string().min(1), sourceProvenance: z.string().default("local-docker") }),
-    z.object({ kind: z.literal("remote-builder"), sourceProvenance: z.string().default("remote-builder") }),
+    z.object({ kind: z.literal("local-docker-finalize"), imageReference: z.string().min(1), sourceProvenance: z.string().default("local-docker"), buildSecrets: z.array(z.string()).default([]) }),
+    z.object({ kind: z.literal("remote-builder"), sourceProvenance: z.string().default("remote-builder"), buildSecrets: z.array(z.string()).default([]) }),
 ]);
 
 export type BuildStrategy = z.infer<typeof BuildStrategyZodModel>;

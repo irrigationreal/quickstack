@@ -5,6 +5,7 @@ import dataAccess from "@/server/adapter/db.client";
 import deploymentLogService from "@/server/services/deployment-logs.service";
 import podService from "@/server/services/pod.service";
 import k3s from "@/server/adapter/kubernetes-api.adapter";
+import { assertSessionCanReadApp } from "@/server/utils/action-wrapper.utils";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ appI
     if (!apiKeyService.isAllowedForApp(authenticated.apiKey, app)) {
         return forbidden();
     }
+    try { assertSessionCanReadApp(authenticated.session, app.id); } catch { return forbidden('API key user is not authorized to read this app.'); }
 
     const requestUrl = new URL(request.url);
     const source = requestUrl.searchParams.get('source') ?? 'container';

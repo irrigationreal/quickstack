@@ -13,6 +13,8 @@ const managedMocks = vi.hoisted(() => ({
     attachPostgres: vi.fn(),
     listPostgres: vi.fn(),
     destroyPostgres: vi.fn(),
+    getManagedStatus: vi.fn(),
+    normalizeManagedService: vi.fn(),
 }));
 const authMocks = vi.hoisted(() => ({ assertSessionCanWriteApp: vi.fn() }));
 const roleMocks = vi.hoisted(() => ({ sessionCanCreateNewAppsForProject: vi.fn() }));
@@ -55,8 +57,10 @@ describe('agent managed postgres route', () => {
             databaseInfo: { databaseName: 'appdb', username: 'appuser', hostname: 'svc-pg-1', port: 5432, internalConnectionUrl: 'postgresql://redacted' },
         });
         managedMocks.attachPostgres.mockResolvedValue({ appId: 'app-1', databaseAppId: 'pg-1', secretName: 'DATABASE_URL', database: { databaseName: 'appdb', hostname: 'svc-pg-1', port: 5432 } });
-        managedMocks.listPostgres.mockResolvedValue([{ id: 'pg-1', projectId: 'proj-1', name: 'pg-main', databaseName: 'appdb', username: 'appuser', hostname: 'svc-pg-1', port: 5432 }]);
+        managedMocks.listPostgres.mockResolvedValue([{ id: 'pg-1', family: 'postgres', projectId: 'proj-1', name: 'pg-main', status: 'healthy', connection: { databaseName: 'appdb', hostname: 'svc-pg-1', port: 5432 } }]);
         managedMocks.destroyPostgres.mockResolvedValue({ databaseAppId: 'pg-1', projectId: 'proj-1', name: 'pg-main' });
+        managedMocks.getManagedStatus.mockResolvedValue({ id: 'pg-1', family: 'postgres', projectId: 'proj-1', name: 'pg-main', status: 'healthy', connection: { databaseName: 'appdb', hostname: 'svc-pg-1', port: 5432 } });
+        managedMocks.normalizeManagedService.mockReturnValue({ id: 'pg-1', family: 'postgres', projectId: 'proj-1', name: 'pg-main', status: 'healthy', connection: { databaseName: 'appdb', hostname: 'svc-pg-1', port: 5432 } });
     });
 
     it('creates and deploys a managed Postgres app before returning sanitized connection metadata', async () => {
@@ -79,6 +83,26 @@ describe('agent managed postgres route', () => {
         expect(apiKeyMocks.hasScope).toHaveBeenCalledWith(authenticated.apiKey, 'apps:read');
         expect(managedMocks.listPostgres).toHaveBeenCalledWith('proj-1');
         expect(json.databases[0]).toEqual(expect.objectContaining({ id: 'pg-1', hostname: 'svc-pg-1', port: 5432 }));
+    });
+
+    it('loads and authorizes the managed app before returning status by id', async () => {
+        const response = await GET(request('GET', undefined, '?id=pg-1'));
+        const json = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(appMocks.getById).toHaveBeenCalledWith('pg-1');
+        expect(apiKeyMocks.isAllowedForApp).toHaveBeenCalledWith(authenticated.apiKey, databaseApp);
+        expect(managedMocks.getManagedStatus).toHaveBeenCalledWith('postgres', 'pg-1');
+        expect(json.service.connection).toEqual({ databaseName: 'appdb', hostname: 'svc-pg-1', port: 5432 });
+    });
+
+    it('rejects status by id before exposing connection metadata when the key cannot access the app', async () => {
+        apiKeyMocks.isAllowedForApp.mockReturnValue(false);
+
+        const response = await GET(request('GET', undefined, '?id=pg-1'));
+
+        expect(response.status).toBe(403);
+        expect(managedMocks.getManagedStatus).not.toHaveBeenCalled();
     });
 
     it('destroys a managed Postgres app through the cleanup path', async () => {

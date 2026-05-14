@@ -1,9 +1,11 @@
 import { CliContext } from '../lib/args';
 import { getDoctor } from '../lib/api-client';
 import { emit } from '../lib/output';
+import { resolveApp } from './apps';
 
 export async function doctor(ctx: CliContext) {
-  const appId = ctx.commandArgs.find(arg => !arg.startsWith('-'));
+  const appArg = ctx.commandArgs.find(arg => !arg.startsWith('-'));
+  const appId = appArg ? (await resolveApp(appArg)).id : undefined;
   const result = await getDoctor({ appId });
   emit(ctx, 'success', {
     message: result.checks.map(check => `${check.status}: ${check.check} - ${check.message}${check.remediation ? ` (${check.remediation})` : ''}`).join('\n'),

@@ -4,15 +4,16 @@ import { CliContext, optionValue, positionalArgs } from '../lib/args';
 import { request } from '../lib/api-client';
 import { emit, printError } from '../lib/output';
 import { readProjectState, selectStateForPath } from '../lib/state';
+import { resolveApp } from './apps';
 
 async function selectedRemoteApp(ctx: CliContext) {
   const explicitAppId = optionValue('--app', ctx.commandArgs);
-  if (explicitAppId) return { appId: explicitAppId };
+  if (explicitAppId) return { appId: (await resolveApp(explicitAppId)).id };
   const [first] = positionalArgs(ctx.commandArgs);
   if (first) {
     const possibleRoot = path.resolve(first);
     const isDirectory = await fs.stat(possibleRoot).then(stat => stat.isDirectory()).catch(() => false);
-    if (!isDirectory) return { appId: first };
+    if (!isDirectory) return { appId: (await resolveApp(first)).id };
     const state = await readProjectState(possibleRoot);
     return selectStateForPath(state, possibleRoot, possibleRoot, explicitAppId);
   }

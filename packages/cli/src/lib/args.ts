@@ -20,7 +20,7 @@ export function positionalArgs(args: string[]) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg.startsWith('--')) {
-      if (!['--json', '--yes', '--non-interactive', '--no-deploy', '--dry-run', '--force', '--force-build', '--follow', '--proxy-protocol', '--disabled', '--share'].includes(arg)) index += 1;
+      if (!['--json', '--yes', '--non-interactive', '--no-deploy', '--dry-run', '--force', '--force-build', '--follow', '--wait', '--background', '--proxy-protocol', '--disabled', '--share', '--prune'].includes(arg)) index += 1;
       continue;
     }
     values.push(arg);

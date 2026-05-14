@@ -124,6 +124,26 @@ class LonghornApiAdapter {
     }
 
 
+    async getSnapshotsForVolume(pvcName: string): Promise<{ id: string; volumeId: string; createdAt?: string }[]> {
+        const response = await fetch(`${this.longhornBaseUrl}/v1/volumes/${pvcName}/snapshots`, {
+            cache: 'no-cache',
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP-Error: ${response.status}`);
+        }
+
+        const data = await response.json() as { data?: { id?: string; name?: string; created?: string; removed?: boolean }[] };
+        return (data.data ?? [])
+            .filter(snapshot => !snapshot.removed && (snapshot.id || snapshot.name))
+            .map(snapshot => ({ id: snapshot.id ?? snapshot.name!, volumeId: pvcName, createdAt: snapshot.created }));
+    }
+
     async backupPvc(pvcName: string) {
         const snapshot = await this.createSnapshot(pvcName);
         await this.createBackup(pvcName, snapshot.id);

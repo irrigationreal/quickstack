@@ -21,6 +21,41 @@ function boundedPositiveLimit(limit?: number | null) {
 }
 
 class SecurityQuotaService {
+    async getProjectQuotaDiagnostics(projectId?: string | null) {
+        if (!projectId) {
+            return {
+                apps: { check: 'quota_apps', code: 'quota.apps', status: 'ok' as const, message: 'No project selected; app quota was not evaluated.' },
+                volumes: { check: 'quota_volumes', code: 'quota.volumes', status: 'ok' as const, message: 'No project selected; volume usage was not evaluated.' },
+                managedServices: { check: 'quota_managed_services', code: 'quota.managed_services', status: 'ok' as const, message: 'No project selected; managed service usage was not evaluated.' },
+            };
+        }
+
+        const quota = await this.getEffectiveQuota(projectId);
+        const maxApps = boundedPositiveLimit(quota?.maxAppsPerProject);
+        const [appCount, volumes] = await Promise.all([
+            dataAccess.client.app.count({ where: { projectId } }),
+            dataAccess.client.appVolume.findMany({ where: { app: { projectId } }, select: { size: true } }),
+        ]);
+        const volumeTotalGi = volumes.reduce((sum, volume) => sum + volume.size, 0);
+
+        const appStatus = maxApps && appCount >= maxApps ? 'error' : maxApps && appCount >= Math.ceil(maxApps * 0.8) ? 'warning' : 'ok';
+        const appMessage = maxApps
+            ? `Project ${projectId} is using ${appCount}/${maxApps} app slots.`
+            : `Project ${projectId} has ${appCount} app(s); no app quota is configured.`;
+
+        return {
+            apps: {
+                check: 'quota_apps',
+                code: 'quota.apps',
+                status: appStatus as 'ok' | 'warning' | 'error',
+                message: appMessage,
+                remediation: appStatus === 'error' ? 'Delete unused apps or ask an admin to raise the quota.' : appStatus === 'warning' ? 'Review unused apps before the next deployment.' : undefined,
+            },
+            volumes: { check: 'quota_volumes', code: 'quota.volumes', status: 'ok' as const, message: `Project ${projectId} has ${volumeTotalGi} GiB of declared volume capacity; no volume quota is configured.` },
+            managedServices: { check: 'quota_managed_services', code: 'quota.managed_services', status: 'ok' as const, message: 'Managed service quota is not configured for this project.' },
+        };
+    }
+
     async getEffectiveQuota(projectId?: string | null): Promise<SecurityQuota | null> {
         return unstable_cache(async () => {
             const scopedQuota = projectId ? await dataAccess.client.securityQuota.findFirst({

@@ -2,6 +2,7 @@ const dataAccessMocks = vi.hoisted(() => ({
     quickDeployBuildCreate: vi.fn(),
     quickDeployBuildUpdate: vi.fn(),
     quickDeployBuildFindFirstOrThrow: vi.fn(),
+    quickDeployBuildFindFirst: vi.fn(),
     appUpdate: vi.fn(),
     transaction: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock('../adapter/db.client', () => ({
             $transaction: dataAccessMocks.transaction,
             quickDeployBuild: {
                 update: dataAccessMocks.quickDeployBuildUpdate,
+                findFirst: dataAccessMocks.quickDeployBuildFindFirst,
                 findFirstOrThrow: dataAccessMocks.quickDeployBuildFindFirstOrThrow,
             },
         }
@@ -67,6 +69,7 @@ function metadataFor(body: Buffer, artifactType: 'source-tar' | 'docker-image-ta
         artifactType,
         contentHash: `sha256:${crypto.createHash('sha256').update(body).digest('hex')}`,
         dockerfilePath: './Dockerfile',
+        serviceRoot: '.',
     };
 }
 
@@ -112,6 +115,7 @@ describe('quickdeploy-upload.service', () => {
             ...(input.data ?? {}),
         }));
         dataAccessMocks.quickDeployBuildFindFirstOrThrow.mockResolvedValue(savedBuild);
+        dataAccessMocks.quickDeployBuildFindFirst.mockResolvedValue(null);
         registryMocks.createManagedQuickDeployImageUrl.mockReturnValue('registry.local:5000/app-1:qd-abc-build-1');
         vi.stubGlobal('fetch', vi.fn());
     });
@@ -186,6 +190,32 @@ describe('quickdeploy-upload.service', () => {
             data: expect.objectContaining({ status: 'SUCCEEDED' }),
         });
         expect(result.status).toBe('SUCCEEDED');
+    });
+
+    it('returns a reusable build result for a successful matching source tar', async () => {
+        dataAccessMocks.quickDeployBuildFindFirst.mockResolvedValue({
+            id: 'build-2',
+            appId: 'app-1',
+            projectId: 'proj-1',
+            mode: 'static',
+            contentHash: `sha256:${'a'.repeat(64)}`,
+            uploadBytes: 512,
+            imageReference: 'registry.local:5000/app-1:cached',
+            status: 'SUCCEEDED',
+        });
+
+        const result = await quickDeployUploadService.findReusableBuildResult({ app, contentHash: `sha256:${'a'.repeat(64)}` });
+
+        expect(dataAccessMocks.quickDeployBuildFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ appId: 'app-1', projectId: 'proj-1', status: 'SUCCEEDED' }),
+        }));
+        expect(result).toEqual(expect.objectContaining({
+            imageReference: 'registry.local:5000/app-1:cached',
+            strategy: 'source-tar',
+            sourceProvenance: `sha256:${'a'.repeat(64)}`,
+            cacheHit: true,
+            buildId: 'build-2',
+        }));
     });
 
     it('rejects a mismatched content hash before storing bytes', async () => {

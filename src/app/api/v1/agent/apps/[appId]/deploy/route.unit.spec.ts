@@ -19,6 +19,8 @@ const watchMocks = vi.hoisted(() => ({
     deploymentStartWatch: vi.fn(),
 }));
 
+const dbMocks = vi.hoisted(() => ({ update: vi.fn() }));
+
 const authMocks = vi.hoisted(() => ({
     assertSessionCanWriteApp: vi.fn(),
 }));
@@ -26,6 +28,7 @@ const authMocks = vi.hoisted(() => ({
 vi.mock('@/server/services/api-key.service', () => ({ default: apiKeyMocks }));
 vi.mock('@/server/services/app.service', () => ({ default: appMocks }));
 vi.mock('@/server/services/audit.service', () => ({ default: auditMocks }));
+vi.mock('@/server/adapter/db.client', () => ({ default: { client: { deploymentRecord: { update: dbMocks.update } } } }));
 vi.mock('@/server/services/standalone-services/build-watch.service', () => ({ default: { startWatch: watchMocks.buildStartWatch } }));
 vi.mock('@/server/services/standalone-services/deployment-event-watch.service', () => ({ default: { startWatch: watchMocks.deploymentStartWatch } }));
 vi.mock('@/server/utils/action-wrapper.utils', () => ({ assertSessionCanWriteApp: authMocks.assertSessionCanWriteApp }));
@@ -46,6 +49,7 @@ describe('agent deploy route', () => {
         apiKeyMocks.isAllowedForApp.mockReturnValue(true);
         appMocks.getById.mockResolvedValue({ id: 'app-1', name: 'Demo App', projectId: 'project-1' });
         appMocks.buildAndDeploy.mockResolvedValue({ deploymentId: 'deployment-1' });
+        dbMocks.update.mockResolvedValue({ deploymentId: 'deployment-1' });
         authMocks.assertSessionCanWriteApp.mockReturnValue(authenticated.session);
     });
 
@@ -110,6 +114,10 @@ describe('agent deploy route', () => {
 
         expect(response.status).toBe(200);
         expect(appMocks.save).toHaveBeenCalledWith({ id: 'app-1', containerImageSource: 'registry.example/app:local', sourceType: 'CONTAINER' }, false);
+        expect(dbMocks.update).toHaveBeenCalledWith(expect.objectContaining({
+            where: { deploymentId: 'deployment-1' },
+            data: expect.objectContaining({ buildStrategy: 'local-docker', imageReference: 'registry.example/app:local' }),
+        }));
         expect(body.buildResult).toEqual(buildResult);
     });
 });

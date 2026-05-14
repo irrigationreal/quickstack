@@ -1,6 +1,7 @@
 import { CliContext, optionValue } from '../lib/args';
 import { request } from '../lib/api-client';
 import { emit, printError } from '../lib/output';
+import { resolveApp } from './apps';
 
 function requiredNumber(ctx: CliContext, name: string) {
   const value = Number(optionValue(name, ctx.commandArgs));
@@ -10,8 +11,10 @@ function requiredNumber(ctx: CliContext, name: string) {
 
 export async function endpoints(ctx: CliContext) {
   const sub = ctx.commandArgs[0];
-  const appId = optionValue('--app', ctx.commandArgs) || ctx.commandArgs[1];
-  if (!appId) printError(ctx, `Usage: quickstack endpoints <list|reserve|release> --app <appId>`);
+  const appArg = optionValue('--app', ctx.commandArgs) || ctx.commandArgs[1];
+  if (!appArg) printError(ctx, `Usage: quickstack endpoints <list|reserve|release> --app <app>`);
+  const app = await resolveApp(appArg);
+  const appId = app.id;
   if (sub === 'list') {
     const result = await request(`/api/v1/agent/apps/${encodeURIComponent(appId)}/endpoints`);
     emit(ctx, 'success', { message: `Fetched public endpoint reservations for ${appId}.`, appId, endpoints: result.endpoints || [] });

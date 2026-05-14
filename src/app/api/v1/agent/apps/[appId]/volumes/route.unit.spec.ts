@@ -10,13 +10,15 @@ const appMocks = vi.hoisted(() => ({
     deleteVolumeById: vi.fn(),
 }));
 const auditMocks = vi.hoisted(() => ({ recordBestEffort: vi.fn() }));
-const authMocks = vi.hoisted(() => ({ assertSessionCanWriteApp: vi.fn() }));
+const storageMocks = vi.hoisted(() => ({ getForApp: vi.fn() }));
+const authMocks = vi.hoisted(() => ({ assertSessionCanReadApp: vi.fn(), assertSessionCanWriteApp: vi.fn() }));
 const dataAccessMocks = vi.hoisted(() => ({ appVolumeCount: vi.fn() }));
 
 vi.mock('@/server/services/api-key.service', () => ({ default: apiKeyMocks }));
 vi.mock('@/server/services/app.service', () => ({ default: appMocks }));
 vi.mock('@/server/services/audit.service', () => ({ default: auditMocks }));
-vi.mock('@/server/utils/action-wrapper.utils', () => ({ assertSessionCanWriteApp: authMocks.assertSessionCanWriteApp }));
+vi.mock('@/server/services/storage-state.service', () => ({ default: storageMocks }));
+vi.mock('@/server/utils/action-wrapper.utils', () => ({ assertSessionCanReadApp: authMocks.assertSessionCanReadApp, assertSessionCanWriteApp: authMocks.assertSessionCanWriteApp }));
 vi.mock('@/server/adapter/db.client', () => ({
     default: {
         client: {
@@ -27,7 +29,7 @@ vi.mock('@/server/adapter/db.client', () => ({
     },
 }));
 
-import { DELETE, GET, POST } from './route';
+import { DELETE, GET, PATCH, POST } from './route';
 
 function expectResponse(response: Response | undefined): Response {
     expect(response).toBeDefined();
@@ -70,6 +72,7 @@ describe('agent app volumes route', () => {
         appMocks.getExtendedById.mockResolvedValue({ id: 'app-1', projectId: 'proj-1', name: 'Demo App', replicas: 1, appVolumes: [volume] });
         appMocks.getVolumeById.mockResolvedValue(volume);
         appMocks.saveVolume.mockResolvedValue(volume);
+        storageMocks.getForApp.mockResolvedValue({ volumes: [{ id: 'vol-1', name: 'data', size: 1024, storageClass: 'longhorn', mountPath: '/data', accessMode: 'ReadWriteOnce', attachedPods: ['pod-1'] }], totalSize: 1024, snapshots: [] });
         dataAccessMocks.appVolumeCount.mockResolvedValue(0);
     });
 
@@ -79,7 +82,7 @@ describe('agent app volumes route', () => {
 
         expect(response.status).toBe(200);
         expect(apiKeyMocks.hasScope).toHaveBeenCalledWith(authenticated.apiKey, 'apps:read');
-        expect(json.volumes[0]).toEqual(expect.objectContaining({ id: 'vol-1', containerMountPath: '/data', storageClassName: 'longhorn' }));
+        expect(json.volumes[0]).toEqual(expect.objectContaining({ id: 'vol-1', mountPath: '/data', storageClass: 'longhorn', attachedPods: ['pod-1'] }));
     });
 
     it('adds a Longhorn-backed volume for an authorized app', async () => {
@@ -104,6 +107,13 @@ describe('agent app volumes route', () => {
         expect(json.volume.containerMountPath).toBe('/data');
     });
 
+    it('resizes a volume without shrinking it', async () => {
+        const response = expectResponse(await PATCH(request('PATCH', { id: 'vol-1', size: 2048 }), { params: Promise.resolve({ appId: 'app-1' }) }));
+
+        expect(response.status).toBe(200);
+        expect(appMocks.saveVolume).toHaveBeenCalledWith(expect.objectContaining({ id: 'vol-1', size: 2048 }));
+    });
+
     it('removes a volume by mount path', async () => {
         const response = expectResponse(await DELETE(request('DELETE', { containerMountPath: '/data' }), { params: Promise.resolve({ appId: 'app-1' }) }));
         const json = await response.json();
@@ -111,5 +121,18 @@ describe('agent app volumes route', () => {
         expect(response.status).toBe(200);
         expect(appMocks.deleteVolumeById).toHaveBeenCalledWith('vol-1');
         expect(json.removed.containerMountPath).toBe('/data');
+    });
+
+    it('rejects missing auth', async () => {
+        apiKeyMocks.authenticateAuthorizationHeader.mockRejectedValue(new Error('bad key'));
+        const response = expectResponse(await GET(request('GET'), { params: Promise.resolve({ appId: 'app-1' }) }));
+        expect(response.status).toBe(401);
+    });
+
+    it('rejects volume mutations without write scope', async () => {
+        apiKeyMocks.hasScope.mockImplementation((_key, scope) => scope === 'apps:read');
+        const response = expectResponse(await POST(request('POST', { containerMountPath: '/data', size: 1024 }), { params: Promise.resolve({ appId: 'app-1' }) }));
+        expect(response.status).toBe(403);
+        expect(appMocks.saveVolume).not.toHaveBeenCalled();
     });
 });

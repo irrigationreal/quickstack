@@ -198,7 +198,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ app
         const buildResult = quickDeployUploadService.normalizeBuildResult({
             imageReference: build.imageReference,
             strategy: 'source-tar',
-            sourceProvenance: parsed.data.contentHash,
+            sourceProvenance: parsed.data.serviceRoot || parsed.data.contentHash,
             cacheHit: false,
             sizeBytes: build.uploadBytes,
             buildId: build.id,

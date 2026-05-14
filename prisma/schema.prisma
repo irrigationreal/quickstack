@@ -552,11 +552,17 @@ model DeploymentRecord {
   apiKeyId      String?
   apiKeyName    String?
   forceBuild    Boolean  @default(false)
-  sourceType    String?
-  buildMethod   String?
-  status        String
-  gitCommitHash String?
-  createdAt     DateTime @default(now())
+  sourceType       String?
+  buildMethod      String?
+  buildStrategy    String?
+  imageReference   String?
+  imageJson        String?
+  sourceProvenance String?
+  buildId          String?
+  cacheHit         Boolean?
+  status           String
+  gitCommitHash    String?
+  createdAt        DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([appId])

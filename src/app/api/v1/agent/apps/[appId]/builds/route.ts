@@ -18,7 +18,41 @@ function forbidden(message = 'API key is not authorized to build this app.') {
     return NextResponse.json({ status: 'error', message }, { status: 403 });
 }
 
-export async function GET() {
+export async function GET(request: Request, { params }: { params: Promise<{ appId: string }> }) {
+    let authenticated;
+    try {
+        authenticated = await apiKeyService.authenticateAuthorizationHeader(request.headers.get('authorization'));
+    } catch {
+        return unauthorized();
+    }
+
+    const { appId } = await params;
+    if (!apiKeyService.hasScope(authenticated.apiKey, 'build:write')) {
+        return forbidden('API key does not have build permission.');
+    }
+
+    const app = await appService.getById(appId).catch(() => null);
+    if (!app) {
+        return NextResponse.json({ status: 'error', message: 'App not found.' }, { status: 404 });
+    }
+    if (!apiKeyService.isAllowedForApp(authenticated.apiKey, app)) {
+        return forbidden();
+    }
+    try {
+        assertSessionCanWriteApp(authenticated.session, app.id);
+    } catch {
+        return forbidden();
+    }
+
+    const contentHash = new URL(request.url).searchParams.get('contentHash');
+    if (contentHash) {
+        if (!/^sha256:[a-f0-9]{64}$/i.test(contentHash)) {
+            return NextResponse.json({ status: 'error', message: 'Invalid content hash.' }, { status: 400 });
+        }
+        const buildResult = await quickDeployUploadService.findReusableBuildResult({ app, contentHash });
+        return NextResponse.json(buildResult ? { status: 'hit', buildResult } : { status: 'miss' });
+    }
+
     return NextResponse.json(quickDeployBuildStrategyService.getCapabilities());
 }
 

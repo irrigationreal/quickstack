@@ -1,7 +1,19 @@
 import { DeploymentStatus, RolloutState } from "@/shared/model/agent-release.model";
+import { Constants } from "@/shared/utils/constants";
 
 type DeploymentLike = {
+    metadata?: {
+        generation?: number;
+    };
+    spec?: {
+        template?: {
+            metadata?: {
+                annotations?: Record<string, string>;
+            };
+        };
+    };
     status?: {
+        observedGeneration?: number;
         replicas?: number;
         readyReplicas?: number;
         conditions?: { type?: string; status?: string; reason?: string; message?: string }[];
@@ -37,6 +49,25 @@ class DeploymentRecordService {
     }
 
     deploymentStatus(deploymentId: string, deployment: DeploymentLike | null | undefined, desiredReplicas: number, pods: PodLike[] = []): DeploymentStatus {
+        const activeDeploymentId = deployment?.spec?.template?.metadata?.annotations?.[Constants.QS_ANNOTATION_DEPLOYMENT_ID];
+        if (!deployment || activeDeploymentId !== deploymentId) {
+            return {
+                deploymentId,
+                rolloutState: 'pending',
+                message: activeDeploymentId ? `Waiting for deployment ${deploymentId} to replace active deployment ${activeDeploymentId}.` : `Waiting for deployment ${deploymentId} to be observed by Kubernetes.`,
+                observedAt: new Date().toISOString(),
+            };
+        }
+        const observedGeneration = deployment.status?.observedGeneration ?? 0;
+        const generation = deployment.metadata?.generation ?? observedGeneration;
+        if (generation > observedGeneration) {
+            return {
+                deploymentId,
+                rolloutState: 'pending',
+                message: `Waiting for Kubernetes to observe generation ${generation}.`,
+                observedAt: new Date().toISOString(),
+            };
+        }
         const rollout = this.rolloutState(deployment, desiredReplicas, pods);
         return {
             deploymentId,
