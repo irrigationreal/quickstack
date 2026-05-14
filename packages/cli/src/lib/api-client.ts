@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import WebSocket from 'ws';
 import { CLI_VERSION } from './version';
 import { configString, readQuickStackConfig } from './state';
 import type { AgentMeResponse } from '../../../../src/shared/model/agent-me.model';
@@ -263,81 +262,21 @@ export function updateChecks(appId: string, payload: any) {
 
 export async function streamExec(appId: string, payload: { command?: string[]; tty?: boolean }, input?: ReadableStream | NodeJS.ReadableStream | null) {
   const { url, apiKey } = await ensureApiConfig();
-  const wsUrl = `${url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')}/api/v1/agent/apps/${encodeURIComponent(appId)}/exec/stream`;
-  const ws = new WebSocket(wsUrl, {
+  const body = input ? (input instanceof ReadableStream ? input : Readable.toWeb(input as any)) : null;
+  const response = await fetch(`${url}/api/v1/agent/apps/${encodeURIComponent(appId)}/exec/stream`, {
+    method: 'POST',
     headers: {
       authorization: `Bearer ${apiKey}`,
       'X-QuickStack-CLI-Version': CLI_VERSION,
       'x-quickstack-exec-command': Buffer.from(JSON.stringify(payload)).toString('base64url'),
       ...(!input && payload.tty === false ? { 'x-quickstack-stdin-closed': 'true' } : {}),
     },
-  });
-  const completion = new Promise<{ exitCode: number }>(resolve => {
-    ws.once('close', (code, reason) => {
-      const match = reason.toString().match(/exitCode:(\d+)/);
-      resolve({ exitCode: match ? Number(match[1]) : code === 1000 ? 0 : 1 });
-    });
-  });
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let closed = false;
-      const closeController = () => {
-        if (closed) return;
-        closed = true;
-        try { controller.close(); } catch { /* already closed */ }
-      };
-      const errorController = (error: unknown) => {
-        if (closed) return;
-        closed = true;
-        controller.error(error instanceof Error ? error : new Error(String(error)));
-      };
-      ws.on('message', data => {
-        if (!closed) controller.enqueue(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
-      });
-      ws.on('close', closeController);
-      ws.on('error', errorController);
-    },
-    cancel() {
-      if (ws.readyState === WebSocket.OPEN) ws.close();
-    },
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    ws.once('open', () => {
-      settled = true;
-      resolve();
-    });
-    ws.once('error', error => {
-      if (settled) return;
-      settled = true;
-      reject(error instanceof Error ? error : new Error(String(error)));
-    });
-    ws.once('unexpected-response', (_request, response) => {
-      if (settled) return;
-      settled = true;
-      reject(new Error(`QuickStack API ${response.statusCode}: ${response.statusMessage}`));
-    });
-  });
-
-  if (input) {
-    const readable = input instanceof ReadableStream ? input : Readable.toWeb(input as any);
-    readable.pipeTo(new WritableStream({
-      write(chunk) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(chunk as any);
-      },
-      close() {
-        if (payload.tty === false && ws.readyState === WebSocket.OPEN) ws.send(Buffer.alloc(0));
-      },
-      abort() {
-        if (ws.readyState === WebSocket.OPEN) ws.close(1011, 'stdin aborted');
-      },
-    })).catch(() => {
-      if (ws.readyState === WebSocket.OPEN) ws.close(1011, 'stdin failed');
-    });
-  }
-
-  return { body, completion };
+    body: body as any,
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' });
+  warnOnServerVersionSkew(response.headers);
+  if (!response.ok) throw new Error(`QuickStack API ${response.status}: ${await response.text()}`);
+  return { body: response.body, completion: Promise.resolve({ exitCode: 0 }) };
 }
 
 export function listManaged(family: string, projectId: string) {
