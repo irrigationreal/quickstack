@@ -1,4 +1,8 @@
 import crypto from "crypto";
+import { spawnSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import paramService, { ParamService } from "./param.service";
 import { CryptoUtils } from "../utils/crypto.utils";
 
@@ -11,9 +15,43 @@ function base64UrlJson(value: unknown) {
     return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
+function publicJwkFromPrivateKey(privateKeyPem: string) {
+    const publicJwk = crypto.createPublicKey(privateKeyPem).export({ format: 'jwk' }) as JsonWebKey & { use?: string; alg?: string; kid?: string };
+    publicJwk.use = 'sig';
+    publicJwk.alg = 'RS256';
+    publicJwk.kid = keyIdFromPublicJwk(publicJwk);
+    return publicJwk;
+}
+
+function selfSignedCertificate(privateKeyPem: string) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quickstack-registry-token-'));
+    const keyPath = path.join(tmpDir, 'token.key');
+    const certPath = path.join(tmpDir, 'token.crt');
+    try {
+        fs.writeFileSync(keyPath, privateKeyPem, { mode: 0o600 });
+        const result = spawnSync('openssl', [
+            'req',
+            '-new',
+            '-x509',
+            '-key', keyPath,
+            '-out', certPath,
+            '-days', '3650',
+            '-subj', '/CN=quickstack-registry-token',
+        ], { encoding: 'utf8' });
+        if (result.status !== 0) {
+            throw new Error(`Could not generate registry token public certificate: ${result.stderr || result.stdout}`);
+        }
+        return fs.readFileSync(certPath, 'utf8');
+    } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+}
+
+type SigningMaterial = { privateKeyPem: string; publicCertPem: string; publicJwk: JsonWebKey & { kid?: string } };
+
 class RegistryTokenSigningService {
-    private cachedMaterial?: { privateKeyPem: string; jwks: { keys: JsonWebKey[] } };
-    private loadingMaterial?: Promise<{ privateKeyPem: string; jwks: { keys: JsonWebKey[] } }>;
+    private cachedMaterial?: SigningMaterial;
+    private loadingMaterial?: Promise<SigningMaterial>;
 
     async ensureSigningMaterial() {
         if (this.cachedMaterial) return this.cachedMaterial;
@@ -29,37 +67,31 @@ class RegistryTokenSigningService {
 
     private async loadSigningMaterial() {
         const existingPrivateKey = await paramService.getString(ParamService.REGISTRY_TOKEN_PRIVATE_KEY);
-        const existingJwks = await paramService.getString(ParamService.REGISTRY_TOKEN_PUBLIC_JWK);
-        if (existingPrivateKey && existingJwks) {
-            return {
-                privateKeyPem: CryptoUtils.decrypt(existingPrivateKey),
-                jwks: JSON.parse(existingJwks) as { keys: JsonWebKey[] },
-            };
+        const existingPublicCert = await paramService.getString(ParamService.REGISTRY_TOKEN_PUBLIC_CERT);
+        if (existingPrivateKey && existingPublicCert) {
+            const privateKeyPem = CryptoUtils.decrypt(existingPrivateKey);
+            return { privateKeyPem, publicCertPem: existingPublicCert, publicJwk: publicJwkFromPrivateKey(privateKeyPem) };
         }
 
-        const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+        const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
         const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-        const publicJwk = publicKey.export({ format: 'jwk' }) as JsonWebKey & { use?: string; alg?: string; kid?: string };
-        publicJwk.use = 'sig';
-        publicJwk.alg = 'RS256';
-        publicJwk.kid = keyIdFromPublicJwk(publicJwk);
-        const jwks = { keys: [publicJwk] };
+        const publicCertPem = selfSignedCertificate(privateKeyPem);
+        const publicJwk = publicJwkFromPrivateKey(privateKeyPem);
         await Promise.all([
             paramService.save({ name: ParamService.REGISTRY_TOKEN_PRIVATE_KEY, value: CryptoUtils.encrypt(privateKeyPem) }),
-            paramService.save({ name: ParamService.REGISTRY_TOKEN_PUBLIC_JWK, value: JSON.stringify(jwks) }),
+            paramService.save({ name: ParamService.REGISTRY_TOKEN_PUBLIC_CERT, value: publicCertPem }),
         ]);
-        return { privateKeyPem, jwks };
+        return { privateKeyPem, publicCertPem, publicJwk };
     }
 
-    async publicJwksJson() {
+    async publicCertPem() {
         const material = await this.ensureSigningMaterial();
-        return JSON.stringify(material.jwks);
+        return material.publicCertPem;
     }
 
     async signRs256(payload: Record<string, unknown>) {
         const material = await this.ensureSigningMaterial();
-        const key = material.jwks.keys[0] as JsonWebKey & { kid?: string };
-        const header = { typ: 'JWT', alg: 'RS256', kid: key.kid };
+        const header = { typ: 'JWT', alg: 'RS256', kid: material.publicJwk.kid };
         const signingInput = `${base64UrlJson(header)}.${base64UrlJson(payload)}`;
         const signature = crypto.sign('RSA-SHA256', Buffer.from(signingInput), material.privateKeyPem).toString('base64url');
         return `${signingInput}.${signature}`;

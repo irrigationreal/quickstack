@@ -451,24 +451,24 @@ class RegistryService {
     private async registryAuthConfig() {
         const directAuthEnabled = await paramService.getBoolean(ParamService.REGISTRY_DIRECT_AUTH_ENABLED, false) ?? false;
         if (!directAuthEnabled) {
-            return { config: '', jwks: undefined as string | undefined };
+            return { config: '', publicCert: undefined as string | undefined };
         }
         const issuer = await this.getTokenIssuer();
-        const [jwks, quickStackHostname] = await Promise.all([
-            registryTokenSigningService.publicJwksJson(),
+        const [publicCert, quickStackHostname] = await Promise.all([
+            registryTokenSigningService.publicCertPem(),
             paramService.getString(ParamService.QS_SERVER_HOSTNAME),
         ]);
-        if (!jwks || !quickStackHostname) {
-            return { config: '', jwks: undefined };
+        if (!publicCert || !quickStackHostname) {
+            return { config: '', publicCert: undefined };
         }
         return {
-            jwks,
+            publicCert,
             config: `auth:
   token:
     realm: https://${stripProtocol(quickStackHostname)}/api/v1/registry/token
     service: ${REGISTRY_TOKEN_SERVICE}
     issuer: ${issuer}
-    jwks: /etc/docker/registry/jwks.json
+    rootcertbundle: /etc/docker/registry/token-root.pem
     signingalgorithms:
       - RS256`,
         };
@@ -530,7 +530,7 @@ ${auth.config ? `${auth.config}\n` : ''}http:
   headers:
     X-Content-Type-Options: [nosniff]
 `,
-                ...(auth.jwks ? { 'jwks.json': auth.jwks } : {}),
+                ...(auth.publicCert ? { 'token-root.pem': auth.publicCert } : {}),
             },
         };
         const existingConfigMaps = await k3s.core.listNamespacedConfigMap(BUILD_NAMESPACE) as { body: V1ConfigMapList };

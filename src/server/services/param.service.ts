@@ -16,7 +16,7 @@ export class ParamService {
     static readonly REGISTRY_TOKEN_ISSUER = 'registryTokenIssuer';
     static readonly REGISTRY_DIRECT_AUTH_ENABLED = 'registryDirectAuthEnabled';
     static readonly REGISTRY_TOKEN_PRIVATE_KEY = 'registryTokenPrivateKey';
-    static readonly REGISTRY_TOKEN_PUBLIC_JWK = 'registryTokenPublicJwk';
+    static readonly REGISTRY_TOKEN_PUBLIC_CERT = 'registryTokenPublicCert';
     static readonly PUBLIC_IPV4_ADDRESS = 'publicIpv4Address';
     static readonly QS_SYSTEM_BACKUP_LOCATION = Constants.QS_SYSTEM_BACKUP_LOCATION_PARAM_KEY;
     static readonly K3S_JOIN_TOKEN = Constants.K3S_JOIN_TOKEN;

@@ -46,8 +46,8 @@ function parseScope(value: string): RegistryScope {
 }
 
 class RegistryAuthService {
-    async ensurePublicJwks() {
-        return await registryTokenSigningService.publicJwksJson();
+    async ensurePublicCertificate() {
+        return await registryTokenSigningService.publicCertPem();
     }
 
     async authenticateDockerBasic(header: string | null): Promise<AuthenticatedApiKey> {
