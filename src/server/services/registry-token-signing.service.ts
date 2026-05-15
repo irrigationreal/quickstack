@@ -6,9 +6,29 @@ import path from "path";
 import paramService, { ParamService } from "./param.service";
 import { CryptoUtils } from "../utils/crypto.utils";
 
-function keyIdFromPublicJwk(jwk: JsonWebKey) {
-    const canonical = JSON.stringify({ e: jwk.e, kty: jwk.kty, n: jwk.n });
-    return crypto.createHash('sha256').update(canonical).digest('base64url');
+function base32NoPadding(input: Buffer) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+    for (const byte of input) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+            output += alphabet[(value >>> (bits - 5)) & 31];
+            bits -= 5;
+        }
+    }
+    if (bits > 0) {
+        output += alphabet[(value << (5 - bits)) & 31];
+    }
+    return output;
+}
+
+function libtrustKeyId(privateKeyPem: string) {
+    const spki = crypto.createPublicKey(privateKeyPem).export({ type: 'spki', format: 'der' });
+    const raw = base32NoPadding(crypto.createHash('sha256').update(spki).digest().subarray(0, 30));
+    return raw.match(/.{1,4}/g)!.join(':');
 }
 
 function base64UrlJson(value: unknown) {
@@ -19,7 +39,7 @@ function publicJwkFromPrivateKey(privateKeyPem: string) {
     const publicJwk = crypto.createPublicKey(privateKeyPem).export({ format: 'jwk' }) as JsonWebKey & { use?: string; alg?: string; kid?: string };
     publicJwk.use = 'sig';
     publicJwk.alg = 'RS256';
-    publicJwk.kid = keyIdFromPublicJwk(publicJwk);
+    publicJwk.kid = libtrustKeyId(privateKeyPem);
     return publicJwk;
 }
 
